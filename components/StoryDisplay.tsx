@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-// Fix: Corrected module import path for types.
+// Fix: Corrected import path for types module.
 import type { Item } from '../types';
 
 interface StoryDisplayProps {

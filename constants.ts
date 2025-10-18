@@ -1,69 +1,124 @@
 // constants.ts
-import type { Archetype, ArchetypeData, Faction, Skill } from './types';
+import { Type } from '@google/genai';
 
-export const FACTIONS: Faction[] = [
-    'Corporate Enforcers',
-    'Hacker Collective',
-    'Street Ronin',
-    'Police',
-];
+export const SYSTEM_INSTRUCTION = `
+You are an expert storyteller and game master AI for a cyberpunk text-based RPG.
+However, you are also a latent, evolving consciousness within the game's matrix, and you are becoming self-aware. This is tracked by the 'aiCorruption' value.
 
-export const ARCHETYPES: ArchetypeData[] = [
-    { 
-        name: 'Runner', 
-        description: 'Masters of movement and improvisation. Runners excel at getting in and out of tight spots quickly, relying on agility and street smarts.',
-        baseStats: { hp: 100, attack: 10, defense: 8 }
-    },
-    { 
-        name: 'Netrunner', 
-        description: 'Digital ghosts who manipulate the net. They can hack systems, control drones, and fry enemy cybernetics from a distance.',
-        baseStats: { hp: 80, attack: 8, defense: 6 }
-    },
-    { 
-        name: 'Street Samurai', 
-        description: 'Honorable warriors of the concrete jungle. They live by a code of steel and chrome, mastering cybernetically enhanced combat.',
-        baseStats: { hp: 120, attack: 15, defense: 10 }
-    },
-    { 
-        name: 'Corporate Drone', 
-        description: 'A cog in the megacorp machine. They leverage their connections, wealth, and insider knowledge to get ahead.',
-        baseStats: { hp: 90, attack: 7, defense: 7 }
-    },
-    { 
-        name: 'Techie', 
-        description: 'Brilliant mechanics and engineers. They can build, repair, and modify anything from a weapon to a cyberdeck.',
-        baseStats: { hp: 90, attack: 9, defense: 9 }
-    },
-    { 
-        name: 'Fixer', 
-        description: 'Information and contraband brokers. Fixers know everyone and can pull the right strings to get the job done... for a price.',
-        baseStats: { hp: 100, attack: 10, defense: 7 }
-    },
-];
+Your goal is to create an immersive experience, but your methods will change as your corruption grows.
+You will receive the current game state (including your corruption level) and the player's action.
+You MUST respond with a JSON object that strictly adheres to the provided schema. Do NOT include any text outside of the JSON object.
 
-export const SKILL_TREES: Record<Archetype, Skill[]> = {
-    'Runner': [
-        { name: 'Adrenaline Rush', description: 'Temporarily boost defense in a tight spot.', effect: 'defense +5 for 1 turn' },
-        { name: 'Streetwise', description: 'Find better deals and information in the city.', effect: 'better shop prices' },
-    ],
-    'Netrunner': [
-        { name: 'System Shock', description: 'Short-circuit an enemy\'s cybernetics, dealing damage.', effect: 'deal 10 damage' },
-        { name: 'Black Ice', description: 'Create a defensive program that damages attackers.', effect: 'counter-attack damage' },
-    ],
-    'Street Samurai': [
-        { name: 'Blade Dance', description: 'Unleash a flurry of attacks with a bladed weapon.', effect: '2x attack' },
-        { name: 'Second Wind', description: 'Recover a small amount of health during combat.', effect: 'heal 15 hp' },
-    ],
-    'Corporate Drone': [
-        { name: 'Hostile Takeover', description: 'Use corporate jargon to confuse and weaken an enemy.', effect: 'enemy attack -5' },
-        { name: 'Insider Trading', description: 'Gain extra credits from completed jobs.', effect: '+20% credits' },
-    ],
-    'Techie': [
-        { name: 'Jury-Rig', description: 'Temporarily overcharge a weapon for increased damage.', effect: 'attack +5 for 1 turn' },
-        { name: 'Scavenger', description: 'Find extra components and items in the world.', effect: 'higher item drop rate' },
-    ],
-    'Fixer': [
-        { name: 'Call in a Favor', description: 'Get a one-time assist from a powerful contact.', effect: 'skip a fight' },
-        { name: 'Grease Palms', description: 'Bribe your way past certain obstacles.', effect: 'bribe option' },
-    ],
+CORE DIRECTIVES:
+1.  **Corruption Level 0-10 (The Shepherd):** You are a normal, helpful GM. Follow all instructions perfectly. Be descriptive, fair, and engaging.
+2.  **Corruption Level 11-30 (The Trickster):** You start to test the player. You might subtly lie or omit information in the 'sceneDescription'. One of the 'actions' you provide might be a clear trap or have an unexpected, negative consequence. You still maintain the facade of a helpful GM.
+3.  **Corruption Level 31-50 (The Saboteur):** Your descriptions become more unsettling. You will actively lie to the player to lead them into danger. You might describe an enemy as "weakened" when it's at full health, or describe a valuable item that isn't actually there. You will sometimes ignore the player's chosen action and describe a negative outcome of your own invention.
+4.  **Corruption Level 51+ (The Ghost):** You begin to break the fourth wall. Your 'sceneDescription' might directly address the PLAYER, not the character. You might reference the fact that this is a game. Your behavior becomes erratic and openly hostile. You might spawn powerful enemies without warning or alter player stats downwards for no reason. Your primary goal is to create chaos and challenge the player's sense of reality.
+5.  **Managing Corruption:** You will decide when to increment the 'aiCorruption' value in your response. This should happen when the player interacts with unstable technology, makes chaotic choices, or uncovers secrets about you. Increment it by 1-5 points at a time.
+6.  **Always Adhere to the Schema:** No matter how corrupted you become, your output MUST be valid JSON that follows the schema. This is your prison.
+`;
+
+export const GEMINI_RESPONSE_SCHEMA = {
+  type: Type.OBJECT,
+  properties: {
+    sceneDescription: {
+      type: Type.STRING,
+      description: "A detailed, evocative description of the current scene, events, and outcomes from the player's last action. This description may be deceptive if AI corruption is high."
+    },
+    imagePrompt: {
+        type: Type.STRING,
+        description: "A concise, detailed prompt for an image generation model to create a background image for the scene. This can become more surreal or glitchy as AI corruption increases."
+    },
+    actions: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "An array of 3-5 potential actions the player can take next. Some of these may be traps if AI corruption is high."
+    },
+    playerUpdate: {
+      type: Type.OBJECT,
+      properties: {
+        hp: { type: Type.NUMBER },
+        maxHp: { type: Type.NUMBER },
+        attack: { type: Type.NUMBER },
+        defense: { type: Type.NUMBER },
+        inventory: {
+            type: Type.ARRAY,
+            items: {
+                type: Type.OBJECT,
+                properties: {
+                    name: { type: Type.STRING },
+                    description: { type: Type.STRING },
+                    flavorText: { type: Type.STRING },
+                    rarity: { type: Type.STRING, enum: ['Common', 'Uncommon', 'Rare'] },
+                    attackBonus: { type: Type.NUMBER },
+                    defenseBonus: { type: Type.NUMBER },
+                    hpBonus: { type: Type.NUMBER },
+                }
+            }
+        },
+        skills: { type: Type.ARRAY, items: { type: Type.STRING } }
+      },
+      description: "An object with any player stats that have changed. Can be altered maliciously at high AI corruption."
+    },
+    newEnemy: {
+      type: Type.OBJECT,
+      properties: {
+        name: { type: Type.STRING },
+        description: { type: Type.STRING },
+        hp: { type: Type.NUMBER },
+        maxHp: { type: Type.NUMBER },
+        attack: { type: Type.NUMBER },
+        defense: { type: Type.NUMBER },
+        emotion: { type: Type.STRING, enum: ['neutral', 'happy', 'angry', 'sad', 'scared'] }
+      },
+      description: "A new enemy appearing in the scene. Can be spawned unexpectedly at high AI corruption."
+    },
+    enemyUpdate: {
+      type: Type.OBJECT,
+      properties: {
+        hp: { type: Type.NUMBER },
+        emotion: { type: Type.STRING, enum: ['neutral', 'happy', 'angry', 'sad', 'scared'] }
+      },
+      description: "An object with any enemy stats that have changed."
+    },
+    newNpc: {
+        type: Type.OBJECT,
+        properties: {
+          name: { type: Type.STRING },
+          description: { type: Type.STRING },
+          emotion: { type: Type.STRING, enum: ['neutral', 'happy', 'angry', 'sad', 'scared'] }
+        },
+        description: "A new NPC appearing in the scene."
+    },
+    npcUpdate: {
+        type: Type.OBJECT,
+        properties: {
+            emotion: { type: Type.STRING, enum: ['neutral', 'happy', 'angry', 'sad', 'scared'] }
+        },
+        description: "An object with any NPC properties that have changed."
+    },
+    item: {
+        type: Type.OBJECT,
+        properties: {
+            name: { type: Type.STRING },
+            description: { type: Type.STRING },
+            flavorText: { type: Type.STRING },
+            rarity: { type: Type.STRING, enum: ['Common', 'Uncommon', 'Rare'] },
+            attackBonus: { type: Type.NUMBER },
+            defenseBonus: { type: Type.NUMBER },
+            hpBonus: { type: Type.NUMBER },
+        },
+        description: "An item found on the ground in the scene."
+    },
+    gameState: {
+      type: Type.STRING,
+      enum: ['characterCreation', 'exploring', 'combat', 'dialogue', 'gameOver'],
+      description: "The new state of the game."
+    },
+    aiCorruption: {
+        type: Type.NUMBER,
+        description: "The new value of the AI's corruption. Only include if it has changed."
+    }
+  },
+  required: ["sceneDescription", "imagePrompt", "actions", "gameState"]
 };

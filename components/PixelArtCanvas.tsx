@@ -1,15 +1,14 @@
+// components/PixelArtCanvas.tsx
 import React, { useRef, useEffect } from 'react';
-// Fix: Corrected module import path for types.
-import type { Archetype, Faction } from '../types';
 
 interface PixelArtCanvasProps {
-    archetype: Archetype;
-    faction: Faction;
+    seed: string;
 }
 
-// Simple hash function to create a seed from a string
+// Simple hash function to create a seed from the player name
 const simpleHash = (str: string): number => {
     let hash = 0;
+    if (str.length === 0) return hash;
     for (let i = 0; i < str.length; i++) {
         const char = str.charCodeAt(i);
         hash = ((hash << 5) - hash) + char;
@@ -28,32 +27,18 @@ const mulberry32 = (a: number) => {
     }
 }
 
-// Define palettes based on archetype and faction
-const ARCHETYPE_PALETTES: Record<Archetype, { hair: string[], clothing: string[], accessory: string[] }> = {
-    'Runner': { hair: ['#f5a623', '#b0b0b0'], clothing: ['#4a4a4a', '#6d2121'], accessory: ['#95a5a6'] },
-    'Netrunner': { hair: ['#00f0ff', '#f5a623'], clothing: ['#1e4852', '#3d4a5e'], accessory: ['#00f0ff'] },
-    'Street Samurai': { hair: ['#2c2121', '#b0b0b0'], clothing: ['#6d2121', '#4a4a4a'], accessory: ['#c0392b'] },
-    'Corporate Drone': { hair: ['#4d3f3f', '#2c2121'], clothing: ['#3d4a5e', '#3b5998'], accessory: ['#b0b0b0'] },
-    'Techie': { hair: ['#6d2121', '#f5a623'], clothing: ['#1e4852', '#4a4a4a'], accessory: ['#95a5a6'] },
-    'Fixer': { hair: ['#4d3f3f', '#b0b0b0'], clothing: ['#3b5998', '#6d2121'], accessory: ['#f5a623'] }
-};
-
-const FACTION_COLORS: Record<Faction, string> = {
-    'Corporate Enforcers': '#3b5998',
-    'Hacker Collective': '#00f0ff',
-    'Street Ronin': '#c0392b',
-    'Police': '#4a90e2'
-};
-
 const PALETTE = {
-    skin: ['#d1a388', '#a17e69', '#e6bca6'],
+    skin: ['#e0ac69', '#c68642', '#f1c27d', '#9a6a42'],
+    hair: ['#2c2121', '#4d3f3f', '#f5a623', '#9b59b6', '#3498db', '#e74c3c'],
+    clothing: ['#34495e', '#2c3e50', '#7f8c8d', '#95a5a6'],
+    accessory: ['#00f0ff', '#f1c40f', '#e74c3c', '#2ecc71'],
     outline: '#1a1a1a',
+    background: 'rgba(0, 255, 255, 0.1)'
 };
 
-
-const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) => {
+const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ seed }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
-    const size = 256; // a bit larger for the main character
+    const size = 128;
     const resolution = 64;
     const scale = size / resolution;
 
@@ -62,86 +47,69 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
         if (!canvas) return;
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
-
+        
         ctx.imageSmoothingEnabled = false;
 
-        const seed = simpleHash(archetype + faction);
-        const rand = mulberry32(seed);
+        const hashSeed = simpleHash(seed);
+        const rand = mulberry32(hashSeed);
 
-        const archetypePalette = ARCHETYPE_PALETTES[archetype];
         const skinColor = PALETTE.skin[Math.floor(rand() * PALETTE.skin.length)];
-        const hairColor = archetypePalette.hair[Math.floor(rand() * archetypePalette.hair.length)];
-        const clothingColor = archetypePalette.clothing[Math.floor(rand() * archetypePalette.clothing.length)];
-        const accessoryColor = archetypePalette.accessory[Math.floor(rand() * archetypePalette.accessory.length)];
-        const factionColor = FACTION_COLORS[faction];
+        const hairColor = PALETTE.hair[Math.floor(rand() * PALETTE.hair.length)];
+        const clothingColor = PALETTE.clothing[Math.floor(rand() * PALETTE.clothing.length)];
+        const hasCybernetics = rand() > 0.5;
 
         ctx.clearRect(0, 0, size, size);
 
-        // Background with faction color hint
-        ctx.fillStyle = factionColor + '20'; // transparent faction color
+        // Background
+        ctx.fillStyle = PALETTE.background;
         ctx.fillRect(0, 0, size, size);
 
-        // Body
+        // Body & Head
         ctx.fillStyle = clothingColor;
-        ctx.fillRect(16 * scale, 32 * scale, 32 * scale, 32 * scale); // Torso
+        ctx.fillRect(8 * scale, 28 * scale, 48 * scale, 36 * scale); // Torso
 
-        // Faction Symbol on chest
-        ctx.fillStyle = factionColor;
-        ctx.fillRect(28 * scale, 40 * scale, 8 * scale, 8 * scale);
-
-        // Head
         ctx.fillStyle = skinColor;
-        ctx.fillRect(20 * scale, 12 * scale, 24 * scale, 24 * scale);
-
-        // Hair based on archetype
+        ctx.fillRect(16 * scale, 12 * scale, 32 * scale, 32 * scale); // Head
+        
+        // Hair
         ctx.fillStyle = hairColor;
         const hairStyle = rand();
-        if (archetype === 'Street Samurai') {
-            ctx.fillRect(28 * scale, 4 * scale, 8 * scale, 12 * scale); // Top knot
-        } else if (hairStyle < 0.5) {
-            ctx.fillRect(18 * scale, 8 * scale, 28 * scale, 8 * scale); // Short hair
-        } else {
-            ctx.fillRect(18 * scale, 8 * scale, 12 * scale, 16 * scale); // Side part
-            ctx.fillRect(34 * scale, 8 * scale, 4 * scale, 16 * scale);
-        }
+        if (hairStyle < 0.3) { // Long
+            ctx.fillRect(14 * scale, 8 * scale, 36 * scale, 20 * scale); 
+        } else if (hairStyle < 0.7) { // Short
+            ctx.fillRect(16 * scale, 6 * scale, 32 * scale, 10 * scale);
+        } // else bald
 
-        // Eyes
+        // Eyes (Simple visor)
+        ctx.fillStyle = PALETTE.accessory[Math.floor(rand() * PALETTE.accessory.length)];
+        ctx.fillRect(18 * scale, 22 * scale, 28 * scale, 6 * scale); 
         ctx.fillStyle = PALETTE.outline;
-        ctx.fillRect(24 * scale, 20 * scale, 4 * scale, 4 * scale);
-        ctx.fillRect(36 * scale, 20 * scale, 4 * scale, 4 * scale);
-        
-        // Archetype accessory
-        ctx.fillStyle = accessoryColor;
-        switch (archetype) {
-            case 'Netrunner':
-                ctx.fillRect(18 * scale, 18 * scale, 28 * scale, 6 * scale); // Visor
-                break;
-            case 'Techie':
-                ctx.fillRect(18 * scale, 18 * scale, 8 * scale, 8 * scale); // Goggles
-                ctx.fillRect(38 * scale, 18 * scale, 8 * scale, 8 * scale);
-                break;
-            case 'Corporate Drone':
-                 ctx.fillStyle = '#FFFFFF';
-                 ctx.fillRect(20 * scale, 32 * scale, 24 * scale, 8 * scale); // White collar
-                break;
-            case 'Street Samurai':
-                ctx.fillRect(20 * scale, 26 * scale, 24 * scale, 2 * scale); // Scar
-                break;
-            case 'Runner': // a bit of armor
-                 ctx.fillStyle = '#7f8c8d';
-                 ctx.fillRect(16 * scale, 32 * scale, 8 * scale, 12 * scale); // Shoulder pad
-                break;
+        ctx.fillRect(18 * scale, 22 * scale, 28 * scale, 1 * scale);
+        ctx.fillRect(18 * scale, 27 * scale, 28 * scale, 1 * scale);
+
+
+        if (hasCybernetics) {
+            ctx.fillStyle = PALETTE.accessory[Math.floor(rand() * PALETTE.accessory.length)];
+            const cyberneticType = rand();
+            if (cyberneticType < 0.5) {
+                // Cyber-arm
+                ctx.fillRect(4 * scale, 28 * scale, 12 * scale, 24 * scale);
+            } else {
+                // Faceplate
+                ctx.fillRect(16 * scale, 28 * scale, 8 * scale, 12 * scale);
+            }
         }
 
-    }, [archetype, faction, scale]);
+    }, [seed, scale]);
+
 
     return (
         <canvas
             ref={canvasRef}
             width={size}
             height={size}
-            style={{ imageRendering: 'pixelated', width: '256px', height: '256px' }}
-            aria-label={`Pixel art portrait of a ${archetype} from the ${faction} faction.`}
+            style={{ imageRendering: 'pixelated', width: '128px', height: '128px' }}
+            aria-label={`Pixel art portrait of player character: ${seed}`}
         />
     );
 };

@@ -1,5 +1,5 @@
 import React from 'react';
-// Fix: Corrected module import path for types.
+// Fix: Corrected import path for types module.
 import type { Enemy } from '../types';
 import EnemyPortraitCanvas from './EnemyPortraitCanvas';
 

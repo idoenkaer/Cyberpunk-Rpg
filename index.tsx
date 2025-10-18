@@ -1,7 +1,7 @@
 
 import React from 'react';
 import ReactDOM from 'react-dom/client';
-// Fix: Corrected module import path for App.
+// Fix: Corrected import path for App module. App.tsx is now a valid module.
 import App from './App';
 
 const rootElement = document.getElementById('root');

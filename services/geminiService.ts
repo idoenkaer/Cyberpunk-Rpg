@@ -4,8 +4,7 @@ import { SYSTEM_INSTRUCTION } from '../constants';
 import type { GameState, StorySegment } from '../types';
 
 // Per instructions, API key is from process.env.API_KEY
-// In a typical React app, this would be process.env.REACT_APP_API_KEY and set in a .env file
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
 const responseSchema = {
     type: Type.OBJECT,

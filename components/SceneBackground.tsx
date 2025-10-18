@@ -6,7 +6,10 @@ interface SceneBackgroundProps {
 }
 
 // Per instructions, API key is from process.env.API_KEY
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || '' });
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
+
+// In-memory cache for generated images
+const imageCache = new Map<string, string>();
 
 const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
@@ -17,9 +20,16 @@ const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
         const generateImage = async () => {
             if (!imagePrompt) return;
 
+            // Check cache first
+            if (imageCache.has(imagePrompt)) {
+                setImageUrl(imageCache.get(imagePrompt)!);
+                setIsLoading(false);
+                setError(null);
+                return;
+            }
+
             setIsLoading(true);
             setError(null);
-            // Don't set image to null here, to avoid flicker between images
             
             try {
                 const response = await ai.models.generateContent({
@@ -36,6 +46,7 @@ const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
                     if (part.inlineData) {
                         const base64ImageBytes: string = part.inlineData.data;
                         const generatedUrl = `data:image/png;base64,${base64ImageBytes}`;
+                        imageCache.set(imagePrompt, generatedUrl); // Save to cache
                         setImageUrl(generatedUrl);
                         break; // Assume one image
                     }

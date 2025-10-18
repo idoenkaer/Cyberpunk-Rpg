@@ -1,5 +1,6 @@
+
 import React, { useState, useCallback, useEffect, useRef } from 'react';
-import type { GameState } from './types';
+import type { GameState, Archetype, Faction } from './types';
 import { INITIAL_GAME_STATE } from './constants';
 import { getNextStorySegment } from './services/geminiService';
 
@@ -15,6 +16,7 @@ import NpcPortraitCanvas from './components/NpcPortraitCanvas';
 import EnemyPortraitCanvas from './components/EnemyPortraitCanvas';
 import DialogueBox from './components/DialogueBox';
 import EnemyStatus from './components/EnemyStatus';
+import CharacterCreation from './components/CharacterCreation'; // New component
 
 const App: React.FC = () => {
     const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
@@ -103,6 +105,20 @@ const App: React.FC = () => {
         });
     };
 
+    const handleStartGame = useCallback((archetype: Archetype, faction: Faction) => {
+        playClickSound();
+        setGameState(prevState => ({
+            ...INITIAL_GAME_STATE, // Reset to initial story
+            player: {
+                ...prevState.player,
+                archetype,
+                faction,
+            },
+            isGameStarted: true,
+        }));
+    }, [playClickSound]);
+
+
     const handleChoice = useCallback(async (choice: string) => {
         playClickSound();
         const stateWithChoice = {
@@ -138,6 +154,7 @@ const App: React.FC = () => {
                 }
 
                 return {
+                    ...prevState,
                     player: newPlayerState,
                     currentSegment: nextSegment,
                     history: [...prevState.history, nextSegment.text],
@@ -156,71 +173,79 @@ const App: React.FC = () => {
 
     const handleRestart = useCallback(() => {
         playClickSound();
+        // Reset to the initial state, which will show the character creation screen
         setGameState(INITIAL_GAME_STATE);
     }, [playClickSound]);
     
-    const { player, currentSegment, history, isLoading, error } = gameState;
+    const { player, currentSegment, history, isLoading, error, isGameStarted } = gameState;
 
     return (
         <div className="bg-black/80 text-white font-mono h-screen flex flex-col items-center p-2 sm:p-4 lg:p-8 overflow-hidden">
             <div className="w-full max-w-7xl mx-auto border-2 border-cyan-400/30 shadow-2xl shadow-cyan-500/10 bg-gray-900/50 backdrop-blur-sm h-full flex flex-col">
                 <Header isMuted={isMuted} onToggleMute={handleToggleMute} />
-                <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 flex-1 overflow-hidden">
-                    {/* Left Column */}
-                    <div className="lg:col-span-3 space-y-4 overflow-y-auto custom-scrollbar">
-                        <PlayerStatus player={player} />
-                        <div className="flex flex-col items-center space-y-4 bg-black/30 p-4 border border-gray-700">
-                            <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
-                            <div className="text-center">
-                                <p className="text-gray-400 text-sm">LOCATION:</p>
-                                <p className="text-lg text-cyan-400">{currentSegment.location}</p>
+                
+                {!isGameStarted ? (
+                    <CharacterCreation onStartGame={handleStartGame} />
+                ) : (
+                    <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4 flex-1 overflow-hidden">
+                        {/* Left Column */}
+                        <aside className="lg:col-span-3 space-y-4 overflow-y-auto custom-scrollbar">
+                            <PlayerStatus player={player} />
+                            <div className="flex flex-col items-center space-y-4 bg-black/30 p-4 border border-gray-700">
+                                <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
+                                <div className="text-center">
+                                    <p className="text-gray-400 text-sm">LOCATION:</p>
+                                    <p className="text-lg text-cyan-400">{currentSegment.location}</p>
+                                </div>
+                                <ProceduralMap locationName={currentSegment.location} />
                             </div>
-                            <ProceduralMap locationName={currentSegment.location} />
+                        </aside>
+
+                        {/* Middle Column (Layered) */}
+                        <div className="lg:col-span-6 flex flex-col gap-4 relative overflow-hidden">
+                        <div className="absolute inset-0 z-0">
+                                <SceneBackground imagePrompt={currentSegment.imagePrompt} />
                         </div>
-                    </div>
+                        <div className="absolute bottom-0 left-0 right-0 h-2/3 z-10 bg-gradient-to-t from-black via-black/80 to-transparent p-4 flex flex-col">
+                                <StoryDisplay history={history} isLoading={isLoading} />
+                        </div>
+                        </div>
 
-                    {/* Middle Column */}
-                    <div className="lg:col-span-6 flex flex-col gap-4">
-                       <div className="aspect-[4/3]">
-                            <SceneBackground imagePrompt={currentSegment.imagePrompt} />
-                       </div>
-                       <StoryDisplay history={history} isLoading={isLoading} />
-                    </div>
-
-                    {/* Right Column */}
-                    <div className="lg:col-span-3 space-y-4 overflow-y-auto custom-scrollbar">
-                        {currentSegment.npc && !currentSegment.isCombat && (
-                            <div className="space-y-4">
-                                <div className="flex flex-col items-center space-y-2 bg-black/30 p-4 border border-gray-700">
-                                    <NpcPortraitCanvas npcName={currentSegment.npc.name} emotion={currentSegment.npc.emotion} />
-                                     <div className="text-center">
-                                        <p className="text-lg text-cyan-400">{currentSegment.npc.name}</p>
-                                        <p className="text-sm text-gray-400 italic">{currentSegment.npc.description}</p>
+                        {/* Right Column */}
+                        <aside className="lg:col-span-3 space-y-4 overflow-y-auto custom-scrollbar">
+                            {currentSegment.npc && currentSegment.npc.dialogue && !currentSegment.isCombat && (
+                                <div className="space-y-4">
+                                    <div className="flex flex-col items-center space-y-2 bg-black/30 p-4 border border-gray-700">
+                                        <NpcPortraitCanvas npcName={currentSegment.npc.name} emotion={currentSegment.npc.emotion} />
+                                        <div className="text-center">
+                                            <p className="text-lg text-cyan-400">{currentSegment.npc.name}</p>
+                                            <p className="text-sm text-gray-400 italic">{currentSegment.npc.description}</p>
+                                        </div>
+                                    </div>
+                                    <DialogueBox dialogue={currentSegment.npc.dialogue} onTalkStart={() => {}} onTalkEnd={() => {}} />
+                                </div>
+                            )}
+                            {currentSegment.isCombat && currentSegment.enemy && (
+                                <div className="space-y-4">
+                                    <EnemyStatus enemy={currentSegment.enemy} />
+                                    <div className="flex flex-col items-center bg-black/30 p-4 border border-red-900/50">
+                                        <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} emotion={currentSegment.enemy.emotion} />
                                     </div>
                                 </div>
-                                <DialogueBox dialogue={currentSegment.npc.dialogue} onTalkStart={() => {}} onTalkEnd={() => {}} />
+                            )}
+                            <div className="sticky top-0">
+                                <StoryControls
+                                    choices={currentSegment.choices}
+                                    onChoice={handleChoice}
+                                    isLoading={isLoading}
+                                    isEnd={!!currentSegment.isEnd}
+                                    onRestart={handleRestart}
+                                    error={error}
+                                />
                             </div>
-                        )}
-                        {currentSegment.isCombat && currentSegment.enemy && (
-                            <div className="space-y-4">
-                                <EnemyStatus enemy={currentSegment.enemy} />
-                                <div className="flex flex-col items-center bg-black/30 p-4 border border-red-900/50">
-                                    <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} emotion={currentSegment.enemy.emotion} />
-                                </div>
-                            </div>
-                        )}
-                        <div className="sticky top-0">
-                            <StoryControls
-                                choices={currentSegment.choices}
-                                onChoice={handleChoice}
-                                isLoading={isLoading}
-                                isEnd={!!currentSegment.isEnd}
-                                onRestart={handleRestart}
-                                error={error}
-                            />
-                        </div>
-                    </div>
-                </main>
+                        </aside>
+                    </main>
+                )}
             </div>
         </div>
     );

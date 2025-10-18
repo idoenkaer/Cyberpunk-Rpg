@@ -1,4 +1,4 @@
-
+// FIX: Removed file marker comments that were causing compilation errors.
 import { GoogleGenAI, Type } from '@google/genai';
 import { SYSTEM_INSTRUCTION } from '../constants';
 import type { GameState, StorySegment } from '../types';
@@ -45,6 +45,7 @@ const responseSchema = {
                     required: ['openingLine', 'choices']
                 }
             },
+            required: ['name', 'description', 'dialogue'],
             // Note: NPC itself is not required for a segment
         },
         enemy: {
@@ -73,7 +74,6 @@ const responseSchema = {
 
 export const getNextStorySegment = async (currentState: GameState, playerChoice: string): Promise<StorySegment> => {
     try {
-        // Fix: Use correct model name 'gemini-2.5-pro' for complex reasoning and JSON generation
         const model = 'gemini-2.5-pro'; 
 
         const prompt = `
@@ -86,12 +86,11 @@ export const getNextStorySegment = async (currentState: GameState, playerChoice:
             
             PLAYER'S ACTION: "${playerChoice}"
 
-            Generate the next part of the story.
+            Generate the next story segment, ensuring the player's character (archetype, faction) is the focus of the narrative and visuals.
         `;
         
         const response = await ai.models.generateContent({
             model: model,
-            // FIX: Simplified `contents` to a string for a text-only prompt, following API guidelines.
             contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
@@ -101,15 +100,22 @@ export const getNextStorySegment = async (currentState: GameState, playerChoice:
             }
         });
         
-        // Fix: Correctly access the text response from the Gemini API result.
         const jsonText = response.text.trim();
-        // The API returns a JSON string, parse it.
-        const nextSegment = JSON.parse(jsonText) as StorySegment;
         
-        return nextSegment;
+        // Hardened error handling for JSON parsing
+        try {
+            const nextSegment = JSON.parse(jsonText) as StorySegment;
+            return nextSegment;
+        } catch (parseError) {
+             console.error("Failed to parse AI response as JSON:", jsonText);
+             throw new Error("AI returned invalid data format. Please try again.");
+        }
 
     } catch (error) {
         console.error("Error generating story segment:", error);
+        if (error instanceof Error && error.message.includes("invalid data format")) {
+            throw error;
+        }
         throw new Error("Failed to generate the next part of the story. The AI might be offline or the response was invalid.");
     }
 };

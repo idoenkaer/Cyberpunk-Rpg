@@ -58,4 +58,10 @@ export interface GameState {
     history: string[];
     isLoading: boolean;
     error: string | null;
+    isGameStarted: boolean; // Added to track game state
+}
+
+export interface ArchetypeData {
+    name: Archetype;
+    description: string;
 }

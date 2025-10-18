@@ -9,6 +9,11 @@ interface DialogueBoxProps {
 }
 
 const DialogueBox: React.FC<DialogueBoxProps> = ({ dialogue, onTalkStart, onTalkEnd }) => {
+    // FIX: Moved guard clause to the top to prevent crash on invalid props.
+    if (!dialogue || !dialogue.openingLine) {
+        return null;
+    }
+
     const [currentResponse, setCurrentResponse] = useState<string | null>(null);
     const [typedText, setTypedText] = useState('');
 
@@ -46,10 +51,6 @@ const DialogueBox: React.FC<DialogueBoxProps> = ({ dialogue, onTalkStart, onTalk
     
     const handleReset = () => {
         setCurrentResponse(null);
-    }
-
-    if (!dialogue || !dialogue.openingLine) {
-        return null;
     }
 
     return (

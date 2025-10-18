@@ -1,3 +1,4 @@
+
 import React, { useEffect, useRef, useState } from 'react';
 
 interface StoryDisplayProps {
@@ -50,11 +51,11 @@ const StoryDisplay: React.FC<StoryDisplayProps> = ({ history, isLoading }) => {
         <div 
             ref={scrollContainerRef}
             onWheel={handleWheel}
-            className="h-[400px] lg:h-full overflow-y-auto pr-2 custom-scrollbar"
+            className="h-full overflow-y-auto pr-4 custom-scrollbar"
         >
             <div
                 style={{ transform: `translateY(${overscroll}px)` }}
-                className="transition-transform duration-300 ease-out"
+                className="transition-transform duration-300 ease-out pt-16" // Added top padding
             >
                 {history.map((text, index) => {
                     const isPlayerChoice = text.startsWith('>');

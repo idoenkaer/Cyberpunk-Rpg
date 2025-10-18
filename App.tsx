@@ -1,186 +1,160 @@
-import React, { useState, useCallback, useEffect, useRef } from 'react';
+import React, { useState, useCallback } from 'react';
+import type { GameState } from './types';
+import { INITIAL_GAME_STATE } from './constants';
+import { getNextStorySegment } from './services/geminiService';
+
+// Import components
 import Header from './components/Header';
-import RainEffect from './components/RainEffect';
-import PixelArtCanvas from './components/PixelArtCanvas';
 import PlayerStatus from './components/PlayerStatus';
-import ProceduralMap from './components/ProceduralMap';
 import StoryDisplay from './components/StoryDisplay';
 import StoryControls from './components/StoryControls';
 import SceneBackground from './components/SceneBackground';
-import DialogueBox from './components/DialogueBox';
+import PixelArtCanvas from './components/PixelArtCanvas';
+import RainEffect from './components/RainEffect';
+import ProceduralMap from './components/ProceduralMap';
 import NpcPortraitCanvas from './components/NpcPortraitCanvas';
-import EnemyStatus from './components/EnemyStatus';
 import EnemyPortraitCanvas from './components/EnemyPortraitCanvas';
-import { getNextStorySegment } from './services/geminiService';
-import { INITIAL_GAME_STATE } from './constants';
-import type { GameState } from './types';
+import DialogueBox from './components/DialogueBox';
+import EnemyStatus from './components/EnemyStatus';
 
-// Placeholder audio URLs - in a real project, these would be imported assets
-const AMBIENT_URL = 'https://www.soundjay.com/nature/sounds/rain-07.mp3';
-const TYPING_URL = 'https://www.soundjay.com/communication/sounds/typewriter-1.mp3';
-const CHOICE_URL = 'https://www.soundjay.com/buttons/sounds/button-20.mp3';
-const ERROR_URL = 'https://www.soundjay.com/buttons/sounds/button-10.mp3';
-
-function App() {
+const App: React.FC = () => {
     const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
+    // Dummy state and handler for Header mute button
     const [isMuted, setIsMuted] = useState(true);
-    const [isTalking, setIsTalking] = useState(false);
-
-    const ambientAudioRef = useRef<HTMLAudioElement>(null);
-    const effectAudioRef = useRef<HTMLAudioElement>(null);
-
-    useEffect(() => {
-        const ambient = ambientAudioRef.current;
-        if (ambient) {
-            ambient.loop = true;
-            ambient.volume = 0.2;
-            if (!isMuted && ambient.paused) {
-                ambient.play().catch(e => console.error("Audio play failed:", e));
-            } else if (isMuted) {
-                ambient.pause();
-            }
-        }
-    }, [isMuted]);
+    const handleToggleMute = () => setIsMuted(prev => !prev);
     
-    const playSound = (src: string, loop = false) => {
-        if (!isMuted && effectAudioRef.current) {
-            effectAudioRef.current.src = src;
-            effectAudioRef.current.loop = loop;
-            effectAudioRef.current.play().catch(e => console.error("Audio effect failed:", e));
-        }
-    };
-    
-    const stopSound = () => {
-         if (effectAudioRef.current) {
-            effectAudioRef.current.pause();
-            effectAudioRef.current.currentTime = 0;
-        }
-    }
+    // Dummy handlers for DialogueBox typewriter effect
+    const handleTalkStart = useCallback(() => {}, []);
+    const handleTalkEnd = useCallback(() => {}, []);
 
     const handleChoice = useCallback(async (choice: string) => {
-        setGameState(prev => ({
-            ...prev,
+        // Create the state for the API call based on the *next* state,
+        // not the currently rendered state which is stale.
+        const stateWithChoice = {
+            ...gameState,
+            history: [...gameState.history, `> ${choice}`],
+        };
+
+        // Update the UI to show loading and the player's choice.
+        setGameState(prevState => ({
+            ...prevState,
             isLoading: true,
             error: null,
-            history: [...prev.history, `> ${choice}`]
+            history: [...prevState.history, `> ${choice}`],
         }));
-        playSound(CHOICE_URL);
 
         try {
-            const nextSegment = await getNextStorySegment(gameState, choice);
+            // Use the state that includes the latest choice for the API call.
+            const nextSegment = await getNextStorySegment(stateWithChoice, choice);
 
-            setGameState(prev => {
-                const newPlayerState = { ...prev.player };
-                if (nextSegment.playerUpdate?.hp !== undefined) {
-                    newPlayerState.hp = nextSegment.playerUpdate.hp;
+            // Update the UI with the result from the API.
+            setGameState(prevState => {
+                const newPlayerState = { ...prevState.player };
+                if (nextSegment.playerUpdate) {
+                    if (nextSegment.playerUpdate.hp !== undefined) {
+                        newPlayerState.hp = nextSegment.playerUpdate.hp;
+                    }
+                    if (nextSegment.playerUpdate.credits !== undefined) {
+                        newPlayerState.credits = nextSegment.playerUpdate.credits;
+                    }
                 }
-                if (nextSegment.playerUpdate?.credits !== undefined) {
-                    newPlayerState.credits = nextSegment.playerUpdate.credits;
+                
+                // Handle game over if HP drops to 0 or below
+                if (newPlayerState.hp <= 0 && !nextSegment.isEnd) {
+                    nextSegment.isEnd = true;
+                    nextSegment.text = `${nextSegment.text}\n\nYour vision fades to black. Your journey ends here.`;
+                    nextSegment.choices = ["Restart"];
                 }
 
                 return {
-                    ...prev,
-                    isLoading: false,
-                    currentSegment: nextSegment,
                     player: newPlayerState,
-                    history: [...prev.history, `> ${choice}`, nextSegment.text],
+                    currentSegment: nextSegment,
+                    history: [...prevState.history, nextSegment.text],
+                    isLoading: false,
+                    error: null,
                 };
             });
-        } catch (error) {
-            const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-            playSound(ERROR_URL);
-            setGameState(prev => ({
-                ...prev,
+        } catch (error: any) {
+            setGameState(prevState => ({
+                ...prevState,
                 isLoading: false,
-                error: errorMessage,
+                error: error.message || 'An unknown error occurred.',
             }));
         }
     }, [gameState]);
 
-    const handleRestart = () => {
+    const handleRestart = useCallback(() => {
         setGameState(INITIAL_GAME_STATE);
-    };
-
-    const onToggleMute = () => {
-        setIsMuted(prev => !prev);
-    };
+    }, []);
     
-    const onTalkStart = useCallback(() => {
-        setIsTalking(true);
-        playSound(TYPING_URL, true);
-    }, []);
-
-    const onTalkEnd = useCallback(() => {
-        setIsTalking(false);
-        stopSound();
-    }, []);
-
     const { player, currentSegment, history, isLoading, error } = gameState;
 
     return (
         <>
             <RainEffect />
-            <audio ref={ambientAudioRef} src={AMBIENT_URL} />
-            <audio ref={effectAudioRef} src={CHOICE_URL} />
-            <div className="bg-black/50 text-white font-mono min-h-screen flex flex-col items-center p-4">
-                <Header isMuted={isMuted} onToggleMute={onToggleMute} />
-                <main className="w-full max-w-7xl mt-4 grid grid-cols-1 lg:grid-cols-4 gap-4 flex-grow">
-                    
-                    {/* Left Column */}
-                    <aside className="lg:col-span-1 space-y-4 flex flex-col">
-                        <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
-                        <PlayerStatus player={player} />
-                        <div className="bg-black/30 p-4 border border-gray-700 flex flex-col items-center">
-                            <h2 className="text-lg text-cyan-400 mb-2 uppercase tracking-widest">Map</h2>
-                            <ProceduralMap locationName={currentSegment.location} />
-                            <p className="mt-2 text-sm text-gray-400">{currentSegment.location}</p>
-                        </div>
-                    </aside>
-
-                    {/* Middle Column */}
-                    <section className="lg:col-span-2 flex flex-col h-[80vh] lg:h-auto">
-                         <div className="flex-grow overflow-hidden bg-black/30 p-4 border border-gray-700">
-                             <StoryDisplay history={history} isLoading={isLoading} />
-                         </div>
-                         <div className="mt-4">
-                             <StoryControls 
-                                choices={currentSegment.choices} 
-                                onChoice={handleChoice} 
-                                isLoading={isLoading} 
-                                isEnd={!!currentSegment.isEnd} 
-                                onRestart={handleRestart}
-                                error={error}
-                             />
-                         </div>
-                    </section>
-
-                    {/* Right Column */}
-                    <aside className="lg:col-span-1 space-y-4 flex flex-col">
-                         <div className="h-48">
-                            <SceneBackground imagePrompt={currentSegment.imagePrompt} />
-                         </div>
-
-                        {currentSegment.npc && !currentSegment.isCombat && (
-                            <>
-                                <NpcPortraitCanvas npcName={currentSegment.npc.name} emotion={currentSegment.npc.emotion} />
-                                <div className="flex-grow">
-                                     <DialogueBox dialogue={currentSegment.npc.dialogue} onTalkStart={onTalkStart} onTalkEnd={onTalkEnd} />
+            <div className="bg-black/80 text-white font-mono min-h-screen flex flex-col items-center p-2 sm:p-4 lg:p-8 selection:bg-cyan-400 selection:text-black">
+                <div className="w-full max-w-7xl mx-auto border-2 border-cyan-400/30 shadow-2xl shadow-cyan-500/10 bg-gray-900/50 backdrop-blur-sm">
+                    <Header isMuted={isMuted} onToggleMute={handleToggleMute} />
+                    <main className="grid grid-cols-1 lg:grid-cols-12 gap-4 p-4">
+                        {/* Left Column */}
+                        <div className="lg:col-span-3 space-y-4">
+                            <PlayerStatus player={player} />
+                            <div className="flex flex-col items-center space-y-4 bg-black/30 p-4 border border-gray-700">
+                                <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
+                                <div className="text-center">
+                                    <p className="text-gray-400 text-sm">LOCATION:</p>
+                                    <p className="text-lg text-cyan-400">{currentSegment.location}</p>
                                 </div>
-                            </>
-                        )}
+                                <ProceduralMap locationName={currentSegment.location} />
+                            </div>
+                        </div>
 
-                        {currentSegment.enemy && currentSegment.isCombat && (
-                            <>
-                                <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} emotion={currentSegment.enemy.emotion} />
-                                <EnemyStatus enemy={currentSegment.enemy} />
-                            </>
-                        )}
-                    </aside>
+                        {/* Middle Column */}
+                        <div className="lg:col-span-6 flex flex-col gap-4">
+                           <div className="aspect-[4/3]">
+                                <SceneBackground imagePrompt={currentSegment.imagePrompt} />
+                           </div>
+                           <StoryDisplay history={history} isLoading={isLoading} />
+                        </div>
 
-                </main>
+                        {/* Right Column */}
+                        <div className="lg:col-span-3 space-y-4">
+                            {currentSegment.npc && !currentSegment.isCombat && (
+                                <div className="space-y-4">
+                                    <div className="flex flex-col items-center space-y-2 bg-black/30 p-4 border border-gray-700">
+                                        <NpcPortraitCanvas npcName={currentSegment.npc.name} emotion={currentSegment.npc.emotion} />
+                                         <div className="text-center">
+                                            <p className="text-lg text-cyan-400">{currentSegment.npc.name}</p>
+                                            <p className="text-sm text-gray-400 italic">{currentSegment.npc.description}</p>
+                                        </div>
+                                    </div>
+                                    <DialogueBox dialogue={currentSegment.npc.dialogue} onTalkStart={handleTalkStart} onTalkEnd={handleTalkEnd} />
+                                </div>
+                            )}
+                            {currentSegment.isCombat && currentSegment.enemy && (
+                                <div className="space-y-4">
+                                    <EnemyStatus enemy={currentSegment.enemy} />
+                                    <div className="flex flex-col items-center bg-black/30 p-4 border border-red-900/50">
+                                        <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} emotion={currentSegment.enemy.emotion} />
+                                    </div>
+                                </div>
+                            )}
+                            <div className="sticky top-4">
+                                <StoryControls
+                                    choices={currentSegment.choices}
+                                    onChoice={handleChoice}
+                                    isLoading={isLoading}
+                                    isEnd={!!currentSegment.isEnd}
+                                    onRestart={handleRestart}
+                                    error={error}
+                                />
+                            </div>
+                        </div>
+                    </main>
+                </div>
             </div>
         </>
     );
-}
+};
 
 export default App;

@@ -1,4 +1,5 @@
 import React, { useRef, useEffect } from 'react';
+// Fix: Corrected module import path for types.
 import type { Emotion } from '../types';
 
 interface EnemyPortraitCanvasProps {

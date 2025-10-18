@@ -1,3 +1,4 @@
+// components/RainEffect.tsx
 import React, { useRef, useEffect } from 'react';
 
 const RainEffect: React.FC = () => {
@@ -9,67 +10,64 @@ const RainEffect: React.FC = () => {
         const ctx = canvas.getContext('2d');
         if (!ctx) return;
 
-        let width = window.innerWidth;
-        let height = window.innerHeight;
-        canvas.width = width;
-        canvas.height = height;
+        let animationFrameId: number;
+        const drops: { x: number; y: number; speed: number; length: number }[] = [];
+        const numDrops = 500;
 
-        const raindrops: { x: number; y: number; length: number; speed: number }[] = [];
-        const numRaindrops = Math.floor(width / 4);
+        const resizeCanvas = () => {
+            canvas.width = window.innerWidth;
+            canvas.height = window.innerHeight;
 
-        for (let i = 0; i < numRaindrops; i++) {
-            raindrops.push({
-                x: Math.random() * width,
-                y: Math.random() * height,
-                length: Math.random() * 20 + 10,
-                speed: Math.random() * 3 + 2,
-            });
-        }
+            drops.length = 0; // Clear existing drops
+            for (let i = 0; i < numDrops; i++) {
+                drops.push({
+                    x: Math.random() * canvas.width,
+                    y: Math.random() * canvas.height,
+                    speed: Math.random() * 4 + 2,
+                    length: Math.random() * 20 + 10,
+                });
+            }
+        };
 
         const draw = () => {
-            ctx.clearRect(0, 0, width, height);
-            ctx.strokeStyle = 'rgba(17, 94, 89, 0.5)'; // Dark cyan color matching theme
+            if (!ctx) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.strokeStyle = 'rgba(175, 225, 255, 0.3)';
             ctx.lineWidth = 1;
             ctx.lineCap = 'round';
 
-            for (const drop of raindrops) {
+            for (let i = 0; i < drops.length; i++) {
+                const drop = drops[i];
                 ctx.beginPath();
                 ctx.moveTo(drop.x, drop.y);
                 ctx.lineTo(drop.x, drop.y + drop.length);
                 ctx.stroke();
 
                 drop.y += drop.speed;
-
-                if (drop.y > height) {
-                    drop.y = 0 - drop.length;
-                    drop.x = Math.random() * width;
+                if (drop.y > canvas.height) {
+                    drop.y = -drop.length;
+                    drop.x = Math.random() * canvas.width;
                 }
             }
-
-            requestAnimationFrame(draw);
+            animationFrameId = requestAnimationFrame(draw);
         };
 
-        const handleResize = () => {
-            width = window.innerWidth;
-            height = window.innerHeight;
-            canvas.width = width;
-            canvas.height = height;
-        };
-
-        window.addEventListener('resize', handleResize);
-        
+        resizeCanvas();
+        window.addEventListener('resize', resizeCanvas);
         draw();
 
         return () => {
-            window.removeEventListener('resize', handleResize);
+            cancelAnimationFrame(animationFrameId);
+            window.removeEventListener('resize', resizeCanvas);
         };
-
     }, []);
 
     return (
-        <canvas 
-            ref={canvasRef} 
-            className="absolute top-0 left-0 w-full h-full -z-10"
+        <canvas
+            ref={canvasRef}
+            className="absolute top-0 left-0 w-full h-full pointer-events-none"
+            style={{ zIndex: 0 }}
+            aria-label="Animated background showing falling rain."
         />
     );
 };

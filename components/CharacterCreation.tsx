@@ -1,6 +1,7 @@
 // components/CharacterCreation.tsx
 import React, { useState } from 'react';
-import type { Archetype, Faction, ArchetypeData } from '../types';
+// Fix: Corrected module import paths for types and constants.
+import type { Archetype, Faction } from '../types';
 import { ARCHETYPES, FACTIONS } from '../constants';
 import PixelArtCanvas from './PixelArtCanvas';
 

@@ -1,23 +1,57 @@
+// types.ts
 export type Archetype = 'Runner' | 'Netrunner' | 'Street Samurai' | 'Corporate Drone' | 'Techie' | 'Fixer';
 export type Faction = 'Corporate Enforcers' | 'Hacker Collective' | 'Street Ronin' | 'Police';
-export type Emotion = 'neutral' | 'happy' | 'angry' | 'sad' | 'scared';
 
-export interface Choice {
-    text: string;
-    response: string;
+export interface ArchetypeData {
+    name: Archetype;
+    description: string;
+    baseStats: {
+        hp: number;
+        attack: number;
+        defense: number;
+    };
 }
 
-export interface DialogueTree {
-    openingLine: string;
-    choices: Choice[];
-}
+export type Rarity = 'Common' | 'Uncommon' | 'Rare';
+export type ItemType = 'weapon' | 'head' | 'chest' | 'legs' | 'consumable';
+export type ItemSlot = 'weapon' | 'head' | 'chest' | 'legs';
 
-export interface NPC {
+export interface Item {
     name: string;
     description: string;
-    dialogue: DialogueTree;
-    emotion?: Emotion;
+    flavorText: string;
+    rarity: Rarity;
+    itemType: ItemType;
+    attackBonus?: number;
+    defenseBonus?: number;
+    hpBonus?: number;
 }
+
+export interface Skill {
+    name: string;
+    description: string;
+    effect: string; // Describes what the skill does mechanically
+}
+
+export interface PlayerState {
+    archetype: Archetype;
+    faction: Faction;
+    hp: number;
+    credits: number;
+    level: number;
+    xp: number;
+    skillPoints: number;
+    unlockedSkills: string[]; // array of skill names
+    inventory: Item[];
+    equippedItems: {
+        weapon: Item | null;
+        head: Item | null;
+        chest: Item | null;
+        legs: Item | null;
+    };
+}
+
+export type Emotion = 'neutral' | 'happy' | 'angry' | 'sad' | 'scared';
 
 export interface Enemy {
     name: string;
@@ -25,43 +59,23 @@ export interface Enemy {
     hp: number;
     maxHp: number;
     attack: number;
+    defense: number;
     emotion?: Emotion;
 }
 
-export interface PlayerState {
-    archetype: Archetype;
-    faction: Faction;
-    hp: number;
-    maxHp: number;
-    credits: number;
-}
-
-export interface StorySegment {
-    id: string;
+export interface Dialogue {
+    npcName: string;
     text: string;
-    location: string;
-    choices: string[];
-    imagePrompt: string;
-    npc?: NPC;
-    enemy?: Enemy;
-    isCombat?: boolean;
-    isEnd?: boolean;
-    playerUpdate?: {
-        hp?: number;
-        credits?: number;
-    };
+    emotion?: Emotion;
 }
 
-export interface GameState {
-    player: PlayerState;
-    currentSegment: StorySegment;
-    history: string[];
-    isLoading: boolean;
-    error: string | null;
-    isGameStarted: boolean; // Added to track game state
-}
-
-export interface ArchetypeData {
-    name: Archetype;
-    description: string;
+// The main state object returned by the Gemini API
+export interface GameStateUpdate {
+    story: string; // The next part of the story text
+    playerState: Partial<PlayerState>; // Changes to the player's state
+    enemy?: Enemy | null; // An enemy if combat starts, or null to end combat
+    dialogue?: Dialogue | null;
+    itemOnGround?: Item | null; // An item found in the world
+    availableActions: string[]; // A list of choices for the player
+    imagePrompt: string; // A prompt for the scene background generator
 }

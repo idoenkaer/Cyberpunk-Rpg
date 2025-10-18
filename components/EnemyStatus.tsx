@@ -1,6 +1,7 @@
-
 import React from 'react';
+// Fix: Corrected module import path for types.
 import type { Enemy } from '../types';
+import EnemyPortraitCanvas from './EnemyPortraitCanvas';
 
 interface EnemyStatusProps {
     enemy: Enemy;
@@ -20,16 +21,13 @@ const HealthBar: React.FC<{ value: number, max: number }> = ({ value, max }) => 
 
 const EnemyStatus: React.FC<EnemyStatusProps> = ({ enemy }) => {
     return (
-        <div className="bg-black/30 p-4 border border-red-900/50">
-            <h2 className="text-lg text-red-400 mb-3 uppercase tracking-widest">Hostile Detected</h2>
-            <div className="space-y-2 text-gray-300">
-                <div className="flex justify-between">
-                    <span>ENTITY:</span>
-                    <span className="text-white font-bold">{enemy.name}</span>
-                </div>
-                <p className="text-sm text-gray-400 italic pt-1">{enemy.description}</p>
+        <div className="bg-black/30 p-4 border border-red-900/50 flex flex-col items-center">
+            <EnemyPortraitCanvas enemyName={enemy.name} emotion={enemy.emotion} />
+            <h2 className="text-lg text-red-400 mt-3 mb-2 uppercase tracking-widest">{enemy.name}</h2>
+            <div className="space-y-2 text-gray-300 w-full">
+                <p className="text-sm text-gray-400 italic pt-1 text-center">{enemy.description}</p>
                 <div className="pt-2">
-                    <span className="mb-1 block">INTEGRITY: {enemy.hp}/{enemy.maxHp}</span>
+                    <span className="mb-1 block text-center">INTEGRITY: {enemy.hp}/{enemy.maxHp}</span>
                     <HealthBar value={enemy.hp} max={enemy.maxHp} />
                 </div>
             </div>

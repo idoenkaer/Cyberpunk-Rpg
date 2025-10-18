@@ -1,17 +1,44 @@
+
 import React, { useState, useEffect } from 'react';
 import type { DialogueTree } from '../types';
 
 interface DialogueBoxProps {
     dialogue: DialogueTree;
+    onTalkStart: () => void;
+    onTalkEnd: () => void;
 }
 
-const DialogueBox: React.FC<DialogueBoxProps> = ({ dialogue }) => {
+const DialogueBox: React.FC<DialogueBoxProps> = ({ dialogue, onTalkStart, onTalkEnd }) => {
     const [currentResponse, setCurrentResponse] = useState<string | null>(null);
+    const [typedText, setTypedText] = useState('');
+
+    const textToDisplay = currentResponse || dialogue.openingLine;
 
     // Reset the dialogue state when a new NPC is loaded
     useEffect(() => {
         setCurrentResponse(null);
     }, [dialogue]);
+    
+    // Typewriter effect
+    useEffect(() => {
+        if (textToDisplay) {
+            onTalkStart();
+            setTypedText('');
+            let i = 0;
+            const interval = setInterval(() => {
+                setTypedText(prev => textToDisplay.slice(0, prev.length + 1));
+                i++;
+                if (i >= textToDisplay.length) {
+                    clearInterval(interval);
+                    onTalkEnd();
+                }
+            }, 30); // 30ms per character
+            return () => {
+                clearInterval(interval);
+                onTalkEnd(); // Ensure it ends if component unmounts
+            };
+        }
+    }, [textToDisplay, onTalkStart, onTalkEnd]);
 
     const handleChoice = (response: string) => {
         setCurrentResponse(response);
@@ -27,9 +54,9 @@ const DialogueBox: React.FC<DialogueBoxProps> = ({ dialogue }) => {
 
     return (
         <div className="bg-black/30 p-4 border border-gray-700 h-full flex flex-col justify-between">
-            <p className="whitespace-pre-wrap text-lg text-gray-300 mb-4">
+            <p className="whitespace-pre-wrap text-lg text-gray-300 mb-4 min-h-[100px]">
                 <span className="text-cyan-400 font-bold">"</span>
-                {currentResponse || dialogue.openingLine}
+                {typedText}
                 <span className="text-cyan-400 font-bold">"</span>
             </p>
             <div className="border-t border-gray-700 pt-4">

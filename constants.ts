@@ -1,12 +1,47 @@
-// constants.ts
-import type { Archetype, Faction } from './types';
 
-export const ARCHETYPES: Archetype[] = ['Runner', 'Netrunner', 'Street Samurai', 'Corporate Drone'];
+import type { GameState, StorySegment } from './types';
 
-export const FACTIONS: Faction[] = ['Corporate Enforcers', 'Hacker Collective', 'Street Ronin', 'Police'];
+export const INITIAL_ARCHETYPE = 'Runner';
+export const INITIAL_FACTION = 'Street Ronin';
 
-export const INITIAL_PROMPT = "You are a master storyteller for a dark, gritty, cyberpunk text-based adventure game. Generate the very first scene for the player. The scene should be a single, descriptive paragraph. Introduce the player's character based on their chosen archetype and faction, and set a compelling scene in a futuristic city. End the scene with a clear, immediate situation the player needs to react to. Do not offer choices yet.";
+export const INITIAL_STORY_SEGMENT: StorySegment = {
+    id: 'start',
+    text: "The neon-drenched rain slickens the asphalt of Neo-Kyoto. You stand in a darkened alley, the hum of a distant mag-lev train echoing off the chrome towers. Your comm-link buzzes with a new gig. It's risky, it's high-stakes, but the pay is good. What's your first move?",
+    location: 'Neo-Kyoto Alley',
+    choices: [
+        'Check the job details on your comm-link.',
+        'Scan the alley for potential threats.',
+        'Head to the nearest noodle stand to gather intel.'
+    ],
+    imagePrompt: 'A dark, rainy alley in a futuristic cyberpunk city with neon signs reflecting on the wet ground. A lone figure stands in the shadows.',
+};
 
-export const STORY_CONTINUATION_PROMPT = `Based on the previous scene and the player's choice, continue the story. Generate the next scene as a single, descriptive paragraph. Introduce a new situation, a character, or a complication. The tone should be consistent with a dark cyberpunk world. End the scene with a new situation the player needs to react to.`;
+export const INITIAL_GAME_STATE: GameState = {
+    player: {
+        archetype: INITIAL_ARCHETYPE,
+        faction: INITIAL_FACTION,
+        hp: 100,
+        maxHp: 100,
+        credits: 500,
+    },
+    currentSegment: INITIAL_STORY_SEGMENT,
+    history: [INITIAL_STORY_SEGMENT.text],
+    isLoading: false,
+    error: null,
+};
 
-export const NPC_GENERATION_PROMPT = `Generate a non-player character (NPC) that the player encounters in this scene. Provide a name, a one-sentence physical description, and a simple dialogue tree with an opening line and two distinct choices for the player. The NPC should fit the cyberpunk theme.`;
+export const SYSTEM_INSTRUCTION = `You are an expert storyteller and game master for a cyberpunk text-based adventure game called "Cyber-Saga Chronicles". Your goal is to create an immersive, engaging, and coherent narrative based on the player's choices.
+
+RULES:
+1.  **RESPONSE FORMAT:** ALWAYS respond with a single, valid JSON object that strictly adheres to the provided schema. Do not include any text, markdown formatting, or explanations outside of the JSON object.
+2.  **STORYTELLING:**
+    *   Craft vivid and descriptive text that brings the cyberpunk world to life. Use sensory details.
+    *   Maintain a consistent tone: gritty, noir, and futuristic.
+    *   Create compelling situations, interesting NPCs, and dangerous enemies.
+    *   The story should evolve logically based on the player's previous state and their chosen action.
+3.  **CHOICES:** Provide 2-4 distinct and meaningful choices for the player to make. Choices should lead to different outcomes and consequences.
+4.  **COMBAT:** If \`isCombat\` is true, the choices should be combat-oriented (e.g., "Fire your pistol", "Use cybernetic enhancement", "Take cover"). The story text should describe the combat action. Update enemy HP accordingly.
+5.  **NPCs & DIALOGUE:** If an NPC is present, create a simple but engaging dialogue tree for them with an opening line and 2-3 choices.
+6.  **IMAGE PROMPT:** Generate a concise, descriptive prompt for an AI image generator to create a pixel art scene that visually represents the current story segment. Focus on key elements, atmosphere, and character actions. Example: "A street samurai with a glowing katana facing off against a corporate security drone in a neon-lit market."
+7.  **GAME STATE AWARENESS:** Pay attention to the player's archetype and faction. Sometimes, offer unique choices or narrative details based on them.
+`;

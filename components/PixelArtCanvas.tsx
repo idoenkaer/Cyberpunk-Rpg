@@ -1,3 +1,5 @@
+
+// components/PixelArtCanvas.tsx
 import React, { useEffect, useRef } from 'react';
 import type { Archetype, Faction } from '../types';
 
@@ -16,18 +18,19 @@ interface Particle {
 }
 
 const PALETTE = {
-    skin: '#d1a388', skin_shadow: '#a17e69',
-    hair: '#2c2121',
+    skin: '#d1a388', skin_shadow: '#a17e69', skin_highlight: '#e6bca6',
+    hair: '#2c2121', hair_highlight: '#4d3f3f',
     outline: '#1a1a1a', 
     background: '#1a202c', 
-    runner_coat: '#4a4a4a', runner_coat_highlight: '#6b6b6b', runner_coat_trim: '#333333',
-    runner_cyber_arm: '#95a5a6', runner_cyber_arm_shadow: '#7f8c8d',
-    runner_eye_glow: '#ff0000',
-    netrunner_hoodie: '#1e4852', netrunner_hoodie_highlight: '#2a6271',
-    netrunner_visor_glow: '#00f0ff',
+    runner_coat: '#4a4a4a', runner_coat_highlight: '#6b6b6b', runner_coat_shadow: '#3a3a3a', runner_coat_trim: '#333333',
+    runner_cyber_arm: '#95a5a6', runner_cyber_arm_shadow: '#7f8c8d', runner_cyber_arm_highlight: '#bdc3c7',
+    runner_eye_glow: '#ff0000', runner_eye_glow_dim: '#a10000',
+    netrunner_hoodie: '#1e4852', netrunner_hoodie_highlight: '#2a6271', netrunner_hoodie_shadow: '#143038',
+    netrunner_visor_glow: '#00f0ff', netrunner_visor_glow_dim: '#008c99',
+
     samurai_armor: '#a0a0b0', samurai_armor_shadow: '#808090', samurai_armor_highlight: '#c0c0d0',
     samurai_scar: '#c78d81',
-    corp_suit: '#3d4a5e', corp_suit_lapel: '#4a5a6e',
+    corp_suit: '#3d4a5e', corp_suit_lapel: '#4a5a6e', corp_suit_shadow: '#2c3645',
     corp_tie: '#c0392b',
     white: '#ffffff',
     muzzle_flash: '#fff38a',
@@ -44,21 +47,16 @@ const PALETTE = {
     police_logo: '#0055ff'
 };
 
-const drawPixel = (ctx: CanvasRenderingContext2D, x: number, y: number, color: string, pixelSize: number = 1) => {
-    ctx.fillStyle = color;
-    ctx.fillRect(x, y, pixelSize, pixelSize);
-};
 
 // --- Animation & State Constants ---
 const IDLE_DURATION = 5000;
 const ACTION_DURATION = 1500; 
-const NUM_IDLE_FRAMES = 2;
-const NUM_ACTION_FRAMES = 15;
+const NUM_IDLE_FRAMES = 8;
+const NUM_ACTION_FRAMES = 24;
 
 const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) => {
     const canvasRef = useRef<HTMLCanvasElement>(null);
     const animationFrameId = useRef<number>(0);
-    const raindrops = useRef<{ x: number; y: number; length: number; speed: number }[]>([]);
     const particles = useRef<Particle[]>([]);
     const spriteCache = useRef<{ idle: HTMLCanvasElement[], action: HTMLCanvasElement[] }>({ idle: [], action: [] });
     
@@ -68,8 +66,8 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
     const animationStateRef = useRef<'IDLE' | 'ACTION'>('IDLE');
     const actionFrameTriggered = useRef<{ [key: number]: boolean }>({});
 
-    const canvasSize = 128;
-    const spriteResolution = 32;
+    const canvasSize = 192;
+    const spriteResolution = 64;
     const scale = canvasSize / spriteResolution;
 
     useEffect(() => {
@@ -93,114 +91,190 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
             const glowCtx = glowCanvas.getContext('2d');
             if (!glowCtx) return frameCanvas;
 
-            const drawHead = (yOffset = 0) => {
+            const drawFactionLogo = (x: number, y: number, faction: Faction) => {
+                switch(faction) {
+                    case 'Corporate Enforcers':
+                        baseCtx.fillStyle = PALETTE.corp_logo;
+                        baseCtx.fillRect(x, y, 6, 2);
+                        baseCtx.fillRect(x + 2, y + 2, 2, 4);
+                        break;
+                    case 'Hacker Collective':
+                         baseCtx.fillStyle = PALETTE.hacker_logo;
+                         baseCtx.fillRect(x+1, y, 4, 2);
+                         baseCtx.fillRect(x, y+2, 6, 2);
+                         baseCtx.fillRect(x+1, y+4, 1, 1);
+                         baseCtx.fillRect(x+4, y+4, 1, 1);
+                        break;
+                    case 'Street Ronin':
+                        baseCtx.fillStyle = PALETTE.samurai_logo;
+                        baseCtx.fillRect(x, y, 6, 2);
+                        baseCtx.fillRect(x+2, y, 2, 6);
+                        baseCtx.fillRect(x, y+4, 6, 2);
+                        break;
+                     case 'Police':
+                        baseCtx.fillStyle = PALETTE.police_logo;
+                        baseCtx.fillRect(x+1, y, 4, 6);
+                        baseCtx.fillStyle = PALETTE.white;
+                        baseCtx.fillRect(x+2, y+1, 2, 4);
+                        break;
+                }
+            }
+
+
+            const drawHead = (yOffset = 0, xOffset = 0, expression: 'neutral' | 'focused' | 'action' = 'neutral') => {
+                // Head shape with shading
                 baseCtx.fillStyle = PALETTE.skin_shadow;
-                baseCtx.fillRect(12, 10 + yOffset, 8, 4); // Neck/chin shadow
+                baseCtx.fillRect(26 + xOffset, 18 + yOffset, 12, 12); // Neck/chin shadow
                 baseCtx.fillStyle = PALETTE.skin;
-                baseCtx.fillRect(12, 6 + yOffset, 8, 5); // Main face
+                baseCtx.fillRect(26 + xOffset, 12 + yOffset, 12, 7); // Main face
+                baseCtx.fillStyle = PALETTE.skin_highlight;
+                baseCtx.fillRect(27 + xOffset, 12 + yOffset, 10, 2); // Brow
+                
+                // Hair
                 baseCtx.fillStyle = PALETTE.hair;
-                baseCtx.fillRect(11, 4 + yOffset, 10, 3); // Hair
+                baseCtx.fillRect(24 + xOffset, 8 + yOffset, 16, 6);
+                baseCtx.fillStyle = PALETTE.hair_highlight;
+                baseCtx.fillRect(25 + xOffset, 8 + yOffset, 14, 2);
+
+                // Eyes & Expression
+                const eyeY = 16 + yOffset;
+                baseCtx.fillStyle = PALETTE.outline;
+                if (expression === 'neutral') {
+                     baseCtx.fillRect(28 + xOffset, eyeY, 4, 2); // Left eye
+                     baseCtx.fillRect(34 + xOffset, eyeY, 4, 2); // Right eye
+                } else if (expression === 'focused') {
+                     baseCtx.fillRect(27 + xOffset, eyeY, 5, 1); // Left eye
+                     baseCtx.fillRect(34 + xOffset, eyeY, 5, 1); // Right eye
+                } else if (expression === 'action') {
+                     baseCtx.fillRect(27 + xOffset, eyeY, 5, 2); // Left eye squint
+                     baseCtx.fillRect(34 + xOffset, eyeY, 5, 2); // Right eye squint
+                     baseCtx.fillRect(30 + xOffset, 22 + yOffset, 6, 2); // Open mouth
+                }
             };
+            
+            let expression: 'neutral' | 'focused' | 'action' = 'neutral';
+             if (state === 'ACTION') {
+                if (progress > 0.2 && progress < 0.6) expression = 'action';
+                else expression = 'focused';
+            }
 
             // --- Draw Base Character ---
             switch (archetype) {
-                case 'Runner':
+                case 'Runner': {
+                    const recoilOffset = (state === 'ACTION' && progress > 0.2 && progress < 0.5) ? -1 : 0;
                     // Trench Coat
-                    baseCtx.fillStyle = PALETTE.runner_coat_trim;
-                    baseCtx.fillRect(8, 14, 16, 14); // Coat base
+                    baseCtx.fillStyle = PALETTE.runner_coat_shadow;
+                    baseCtx.fillRect(16 + recoilOffset, 28, 32, 32);
                     baseCtx.fillStyle = PALETTE.runner_coat;
-                    baseCtx.fillRect(9, 14, 14, 13); // Main coat body
+                    baseCtx.fillRect(18 + recoilOffset, 28, 28, 30);
+                    // Coat texture
+                    baseCtx.globalAlpha = 0.1;
+                    baseCtx.fillStyle = PALETTE.outline;
+                    for(let i = 0; i < 10; i++) {
+                         baseCtx.fillRect(18 + recoilOffset + Math.random() * 28, 28 + Math.random() * 30, 1, 1);
+                    }
+                    baseCtx.globalAlpha = 1;
                     baseCtx.fillStyle = PALETTE.runner_coat_highlight;
-                    baseCtx.fillRect(8, 13, 16, 1); // Shoulders
+                    baseCtx.fillRect(16 + recoilOffset, 26, 32, 2);
+                    drawFactionLogo(40 + recoilOffset, 30, faction);
                     // Cybernetic Arm
                     baseCtx.fillStyle = PALETTE.runner_cyber_arm_shadow;
-                    baseCtx.fillRect(4, 15, 4, 8);
+                    baseCtx.fillRect(8 + recoilOffset, 30, 8, 16);
                     baseCtx.fillStyle = PALETTE.runner_cyber_arm;
-                    baseCtx.fillRect(4, 15, 3, 7);
-                    // Legs
-                    baseCtx.fillStyle = PALETTE.runner_coat_trim;
-                    baseCtx.fillRect(11, 27, 4, 3);
-                    baseCtx.fillRect(17, 27, 4, 3);
-                    drawHead();
+                    baseCtx.fillRect(8 + recoilOffset, 30, 6, 15);
+                    baseCtx.fillStyle = PALETTE.runner_cyber_arm_highlight;
+                    baseCtx.fillRect(8 + recoilOffset, 30, 2, 15);
+                    const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
+                    drawHead(recoilOffset, headTilt, expression);
+                    glowCtx.fillStyle = (Math.sin(elapsedTimeRef.current / 400) > 0) ? PALETTE.runner_eye_glow : PALETTE.runner_eye_glow_dim;
+                    glowCtx.fillRect(28 + headTilt, 16, 2, 2);
+                    if (state === 'ACTION' && progress > 0.2 && progress < 0.3) {
+                         glowCtx.fillStyle = PALETTE.muzzle_flash;
+                         glowCtx.fillRect(4, 32, 12, 12);
+                    }
                     break;
-                case 'Netrunner':
-                    // Hoodie
+                }
+                case 'Netrunner': {
+                    const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
+                    baseCtx.fillStyle = PALETTE.netrunner_hoodie_shadow;
+                    baseCtx.fillRect(16, 26, 32, 34);
+                    baseCtx.fillRect(20 + headTilt, 10, 24, 20); // Hood
                     baseCtx.fillStyle = PALETTE.netrunner_hoodie;
-                    baseCtx.fillRect(8, 13, 16, 15); // Main body
-                    baseCtx.fillRect(10, 5, 12, 10); // Hood
-                    baseCtx.fillStyle = PALETTE.netrunner_hoodie_highlight;
-                    baseCtx.fillRect(8, 12, 16, 1); // Shoulders
-                    baseCtx.fillRect(10, 5, 12, 1); // Hood top
+                    baseCtx.fillRect(18, 26, 28, 32);
+                    baseCtx.fillRect(22 + headTilt, 10, 20, 18); // Hood inner
+                    drawFactionLogo(40, 30, faction);
                     // Face inside hood
                     baseCtx.fillStyle = PALETTE.skin_shadow;
-                    baseCtx.fillRect(12, 9, 8, 5);
-                    // Legs
-                    baseCtx.fillStyle = PALETTE.hair; // Using hair color for dark pants
-                    baseCtx.fillRect(11, 28, 4, 2);
-                    baseCtx.fillRect(17, 28, 4, 2);
+                    baseCtx.fillRect(28 + headTilt, 18, 8, 10);
+                    if(expression !== 'neutral') { // Light from visor
+                        baseCtx.fillStyle = PALETTE.netrunner_visor_glow_dim;
+                        baseCtx.fillRect(28 + headTilt, 20, 8, 4);
+                    }
+                    // Visor Glow
+                    const pulse = state === 'IDLE' ? (Math.sin(elapsedTimeRef.current / 300) > 0) : true;
+                    if(pulse) {
+                        glowCtx.fillStyle = PALETTE.netrunner_visor_glow;
+                        glowCtx.fillRect(26 + headTilt, 18, 12, (expression === 'action') ? 6 : 4);
+                    }
                     break;
-                case 'Street Samurai':
+                }
+                case 'Street Samurai': {
+                    const lunge = (state === 'ACTION') ? Math.sin(progress * Math.PI) * 8 : 0;
+                    const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
                     // Armor
                     baseCtx.fillStyle = PALETTE.samurai_armor_shadow;
-                    baseCtx.fillRect(8, 14, 16, 12); // Torso shadow
+                    baseCtx.fillRect(16 + lunge, 28, 32, 28);
                     baseCtx.fillStyle = PALETTE.samurai_armor;
-                    baseCtx.fillRect(9, 14, 14, 11); // Torso main
+                    baseCtx.fillRect(18 + lunge, 28, 28, 26);
                     baseCtx.fillStyle = PALETTE.samurai_armor_highlight;
-                    baseCtx.fillRect(7, 13, 18, 1); // Pauldrons
-                    baseCtx.fillRect(9, 14, 1, 11); // Left plate highlight
-                    baseCtx.fillRect(22, 14, 1, 11); // Right plate highlight
-                    // Katana Hilt
-                    baseCtx.fillStyle = PALETTE.hair;
-                    baseCtx.fillRect(23, 10, 2, 5);
-                    // Legs
-                    baseCtx.fillStyle = PALETTE.samurai_armor_shadow;
-                    baseCtx.fillRect(11, 25, 4, 4);
-                    baseCtx.fillRect(17, 25, 4, 4);
-                    drawHead();
+                    baseCtx.fillRect(14 + lunge, 26, 36, 2); // Pauldrons
+                    drawFactionLogo(40 + lunge, 30, faction);
+                    drawHead(0, headTilt, expression);
                     // Scar
                     baseCtx.fillStyle = PALETTE.samurai_scar;
-                    baseCtx.fillRect(16, 7, 1, 3);
+                    baseCtx.fillRect(34 + headTilt, 14, 2, 6);
+                    // Katana Slash
+                    if (state === 'ACTION' && progress > 0.2 && progress < 0.6) {
+                        glowCtx.save();
+                        glowCtx.translate(32, 32);
+                        glowCtx.rotate(0.5);
+                        glowCtx.fillStyle = PALETTE.katana_slash;
+                        glowCtx.fillRect( -10, -30, 20, 60);
+                        glowCtx.restore();
+                    }
                     break;
-                case 'Corporate Drone':
-                     // Suit Jacket
-                    baseCtx.fillStyle = PALETTE.corp_suit;
-                    baseCtx.fillRect(8, 14, 16, 14);
-                    // Lapels
-                    baseCtx.fillStyle = PALETTE.corp_suit_lapel;
-                    baseCtx.fillRect(9, 14, 3, 7);
-                    baseCtx.fillRect(20, 14, 3, 7);
-                    // Shirt
-                    baseCtx.fillStyle = PALETTE.white;
-                    baseCtx.fillRect(12, 14, 8, 5);
-                    // Tie
-                    baseCtx.fillStyle = PALETTE.corp_tie;
-                    baseCtx.fillRect(15, 14, 2, 8);
-                    // Legs
-                    baseCtx.fillStyle = PALETTE.hair;
-                    baseCtx.fillRect(11, 28, 4, 3);
-                    baseCtx.fillRect(17, 28, 4, 3);
-                    drawHead();
-                    break;
-            }
-            // Draw Faction Insignia on baseCtx
-            // ...
-
-            // --- Draw Glow Elements on Glow Canvas ---
-            if (state === 'IDLE') {
-                const pulse = (Math.sin(progress * 2 * Math.PI) + 1) / 2;
-                if (archetype === 'Runner' && pulse > 0.5) drawPixel(glowCtx, 13, 9, PALETTE.runner_eye_glow);
-                if (archetype === 'Netrunner' && pulse > 0.5) {
-                    glowCtx.fillStyle = PALETTE.netrunner_visor_glow;
-                    glowCtx.fillRect(12,10,8,2);
                 }
-            } else { // ACTION
-                if (archetype === 'Runner' && progress > 0.1 && progress < 0.25) drawPixel(glowCtx, -6, 15, PALETTE.muzzle_flash, 3);
-                if (archetype === 'Street Samurai' && progress > 0.1 && progress < 0.4) drawPixel(glowCtx, 16, 16, PALETTE.katana_glow);
-                if (archetype === 'Corporate Drone' && progress < 0.7) for(let i=0; i<3; i++) drawPixel(glowCtx, 2, 18+i*2, PALETTE.netrunner_visor_glow);
+                 case 'Corporate Drone': {
+                    const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
+                    // Suit Jacket
+                    baseCtx.fillStyle = PALETTE.corp_suit_shadow;
+                    baseCtx.fillRect(16, 28, 32, 32);
+                    baseCtx.fillStyle = PALETTE.corp_suit;
+                    baseCtx.fillRect(18, 28, 28, 30);
+                    // Lapels/Shirt/Tie
+                    baseCtx.fillStyle = PALETTE.white;
+                    baseCtx.fillRect(26, 28, 12, 10);
+                    baseCtx.fillStyle = PALETTE.corp_tie;
+                    baseCtx.fillRect(31, 28, 2, 12);
+                     baseCtx.fillStyle = PALETTE.corp_suit_lapel;
+                    baseCtx.fillRect(20, 28, 6, 14);
+                    baseCtx.fillRect(38, 28, 6, 14);
+                    drawFactionLogo(20, 32, faction);
+                    drawHead(0, headTilt, expression);
+                    // Holo interface
+                    if (state === 'ACTION' && progress < 0.8) {
+                        for(let i=0; i<5; i++) {
+                            if (Math.random() > 0.3) {
+                                glowCtx.fillStyle = PALETTE.holo_particle;
+                                glowCtx.fillRect(Math.random() * 24, 30 + Math.random() * 16, 2, 2);
+                            }
+                        }
+                    }
+                    break;
+                 }
             }
-
-            // --- Composite Layers to Final Frame ---
-            // 1. Draw Outline
+            
+            // --- Composite Layers ---
             const outlineCanvas = document.createElement('canvas');
             outlineCanvas.width = spriteResolution;
             outlineCanvas.height = spriteResolution;
@@ -212,20 +286,16 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
                 outlineCtx.fillRect(0, 0, spriteResolution, spriteResolution);
                 ctx.drawImage(outlineCanvas, 0, 1);
                 ctx.drawImage(outlineCanvas, 1, 0);
-                ctx.drawImage(outlineCanvas, -1, 0);
-                ctx.drawImage(outlineCanvas, 0, -1);
             }
             
-            // 2. Draw Base Sprite
             ctx.drawImage(baseCanvas, 0, 0);
 
-            // 3. Draw Bloom/Glow Layer
             ctx.save();
-            ctx.filter = 'blur(2px)';
+            ctx.filter = 'blur(4px)';
+            ctx.globalAlpha = 0.8;
             ctx.globalCompositeOperation = 'lighter';
             ctx.drawImage(glowCanvas, 0, 0);
             ctx.restore();
-            // Draw the core glow again so it's sharp
             ctx.globalCompositeOperation = 'lighter';
             ctx.drawImage(glowCanvas, 0, 0);
             ctx.globalCompositeOperation = 'source-over';
@@ -234,14 +304,9 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
         };
 
         const idleFrames: HTMLCanvasElement[] = [];
-        for (let i=0; i < NUM_IDLE_FRAMES; i++) {
-            idleFrames.push(generateSpriteFrame('IDLE', i / NUM_IDLE_FRAMES));
-        }
-
+        for (let i=0; i < NUM_IDLE_FRAMES; i++) idleFrames.push(generateSpriteFrame('IDLE', i / NUM_IDLE_FRAMES));
         const actionFrames: HTMLCanvasElement[] = [];
-        for (let i=0; i < NUM_ACTION_FRAMES; i++) {
-            actionFrames.push(generateSpriteFrame('ACTION', i / NUM_ACTION_FRAMES));
-        }
+        for (let i=0; i < NUM_ACTION_FRAMES; i++) actionFrames.push(generateSpriteFrame('ACTION', i / NUM_ACTION_FRAMES));
         spriteCache.current = { idle: idleFrames, action: actionFrames };
 
         const canvas = canvasRef.current;
@@ -250,12 +315,6 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
         if (!ctx) return;
         ctx.imageSmoothingEnabled = false;
 
-        if (raindrops.current.length === 0) {
-            for (let i = 0; i < 20; i++) raindrops.current.push({ x: Math.random() * canvasSize, y: Math.random() * canvasSize, length: Math.random() * 10 + 5, speed: Math.random() * 2 + 1.5 });
-        }
-
-        const neonTints = [ 'rgba(255, 0, 150, 0.1)', 'rgba(0, 255, 255, 0.1)', 'rgba(0, 255, 100, 0.1)' ];
-        
         const animate = (timestamp: number) => {
             if (lastTimeRef.current === 0) lastTimeRef.current = timestamp;
             const deltaTime = timestamp - lastTimeRef.current;
@@ -266,10 +325,7 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
             if (animationStateRef.current === 'IDLE' && stateTimerRef.current > IDLE_DURATION) {
                 animationStateRef.current = 'ACTION';
                 stateTimerRef.current = 0;
-                actionFrameTriggered.current = {}; // Reset one-shot triggers
-                 if (archetype === 'Street Samurai') { 
-                    for (let i=0; i<15; i++) particles.current.push({ x: 80, y: 80, vx: (Math.random()-0.5)*5, vy: (Math.random()-0.5)*5, life: 300, maxLife: 300, color: PALETTE.katana_glow, size: 2, gravity: 0.05 });
-                }
+                actionFrameTriggered.current = {};
             } else if (animationStateRef.current === 'ACTION' && stateTimerRef.current > ACTION_DURATION) {
                 animationStateRef.current = 'IDLE';
                 stateTimerRef.current = 0;
@@ -279,65 +335,32 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
             ctx.fillStyle = PALETTE.background;
             ctx.fillRect(0, 0, canvasSize, canvasSize);
             
-            // --- DRAW PRE-RENDERED FRAME ---
             const state = animationStateRef.current;
             const frameCount = state === 'IDLE' ? NUM_IDLE_FRAMES : NUM_ACTION_FRAMES;
             const duration = state === 'IDLE' ? IDLE_DURATION : ACTION_DURATION;
             const frameIndex = Math.floor((stateTimerRef.current / duration) * frameCount) % frameCount;
             const frameToDraw = spriteCache.current[state.toLowerCase() as 'idle'|'action'][frameIndex];
             
-            const idleOffset = Math.sin(elapsedTimeRef.current / 500);
-            const idleOffsetPixels = idleOffset * scale;
-
+            const idleOffset = Math.sin(elapsedTimeRef.current / 600) * 2;
+            
             if (frameToDraw) {
-                 ctx.drawImage(frameToDraw, 0, idleOffsetPixels, canvasSize, canvasSize);
+                 ctx.drawImage(frameToDraw, 0, idleOffset, canvasSize, canvasSize);
             }
             
-             // --- ONE-SHOT FRAME TRIGGERS FOR PARTICLES ---
-            if (state === 'ACTION' && !actionFrameTriggered.current[frameIndex]) {
-                if (archetype === 'Runner' && frameIndex === 2) { // Muzzle flash frame
-                    for (let i = 0; i < 15; i++) {
-                        const angle = Math.random() * Math.PI * 2;
-                        const speed = Math.random() * 3 + 1;
-                        particles.current.push({
-                            x: (-6 + 1.5) * scale,
-                            y: (15 + 1.5) * scale + idleOffsetPixels,
-                            vx: Math.cos(angle) * speed,
-                            vy: Math.sin(angle) * speed,
-                            life: 150 + Math.random() * 150,
-                            maxLife: 300,
-                            color: PALETTE.spark,
-                            size: Math.random() * 2 + 1,
-                            gravity: 0.1
-                        });
+            // --- Particle Triggers ---
+             if (state === 'ACTION' && !actionFrameTriggered.current[frameIndex]) {
+                if (archetype === 'Runner' && frameIndex >= 5 && frameIndex <= 7) {
+                    for (let i = 0; i < 5; i++) {
+                         particles.current.push({ x: 12 * scale, y: 38 * scale, vx: -Math.random() * 5 - 2, vy: (Math.random() - 0.5) * 4, life: 200, maxLife: 200, color: PALETTE.spark, size: 3, gravity: 0.1 });
                     }
                 }
-                actionFrameTriggered.current[frameIndex] = true;
+                 actionFrameTriggered.current[frameIndex] = true;
             }
 
-            // --- DRAW DYNAMIC EFFECTS ---
-             // Cybernetic Sparks (always active check)
-            if (archetype === 'Runner' && Math.random() > 0.985) {
-                const sparkCount = Math.floor(Math.random() * 2) + 1;
-                for (let i = 0; i < sparkCount; i++) {
-                    particles.current.push({
-                        x: (3 + Math.random() * 4) * scale,
-                        y: (14 + Math.random() * 8) * scale + idleOffsetPixels,
-                        vx: (Math.random() - 0.5) * 2,
-                        vy: (Math.random() - 0.7) * 2,
-                        life: 200 + Math.random() * 200,
-                        maxLife: 400,
-                        color: PALETTE.cyber_spark,
-                        size: 2,
-                        gravity: 0.05
-                    });
-                }
-            }
-
-            // Netrunner particles (continuous during action)
-            if (state === 'ACTION' && archetype === 'Netrunner' && Math.random() > 0.5) {
-                particles.current.push({ x: 64, y: 64, vx: (Math.random()-0.5)*3, vy: (Math.random()-0.5)*3, life: 500, maxLife: 500, color: PALETTE.holo_particle, size: 2});
-            }
+            // --- Continuous Particle Effects ---
+             if (state === 'ACTION' && archetype === 'Netrunner') {
+                 particles.current.push({ x: Math.random()*canvasSize, y: Math.random()*canvasSize, vx: 0, vy: -0.5, life: 400, maxLife: 400, color: PALETTE.holo_particle, size: 2});
+             }
 
             // Update and draw all particles
             particles.current = particles.current.filter(p => p.life > 0);
@@ -345,26 +368,10 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
                 p.vy += p.gravity || 0;
                 p.x += p.vx; p.y += p.vy; p.life -= deltaTime;
                 ctx.globalAlpha = p.life / p.maxLife;
-                drawPixel(ctx, p.x, p.y, p.color, p.size);
+                ctx.fillStyle = p.color;
+                ctx.fillRect(p.x, p.y, p.size, p.size);
                 ctx.globalAlpha = 1.0;
             }
-
-            // Sprite Rain Distortion
-            for (let i=0; i < 3; i++) {
-                const y = (elapsedTimeRef.current/2 + i*40) % canvasSize;
-                ctx.strokeStyle = PALETTE.sprite_rain;
-                ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(canvasSize, y); ctx.stroke();
-            }
-
-            // Environmental Tint
-            const tintIndex = Math.floor(elapsedTimeRef.current / 2000) % neonTints.length;
-            ctx.globalCompositeOperation = 'color';
-            ctx.fillStyle = neonTints[tintIndex];
-            ctx.fillRect(0, 0, canvasSize, canvasSize);
-            ctx.globalCompositeOperation = 'source-over';
-
-            // Background Rain
-            for (const drop of raindrops.current) { /* ... draw background rain ... */ }
 
             animationFrameId.current = requestAnimationFrame(animate);
         };
@@ -383,8 +390,8 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
             ref={canvasRef}
             width={canvasSize}
             height={canvasSize}
-            style={{ imageRendering: 'pixelated', width: '128px', height: '128px' }}
-            aria-label={`Pixel art animation of a ${archetype}`}
+            style={{ imageRendering: 'pixelated', width: '192px', height: '192px' }}
+            aria-label={`Hyperdetailed pixel art animation of a ${archetype}`}
         />
     );
 };

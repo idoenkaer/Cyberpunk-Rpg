@@ -1,149 +1,111 @@
-// services/geminiService.ts
-import { GoogleGenAI, GenerateContentResponse, Type } from '@google/genai';
-import type { Archetype, Faction, StorySegment, Npc } from '../types';
-import { INITIAL_PROMPT, STORY_CONTINUATION_PROMPT, NPC_GENERATION_PROMPT } from '../constants';
 
-// Ensure the API key is available from environment variables
-if (!process.env.API_KEY) {
-    throw new Error("API_KEY environment variable is not set");
-}
+import { GoogleGenAI, Type } from '@google/genai';
+import { SYSTEM_INSTRUCTION } from '../constants';
+import type { GameState, StorySegment } from '../types';
 
-// Fix: Initialize the GoogleGenAI client with the API key from environment variables.
-const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
-const model = 'gemini-2.5-flash';
+// Per instructions, API key is from process.env.API_KEY
+// In a typical React app, this would be process.env.REACT_APP_API_KEY and set in a .env file
+const ai = new GoogleGenAI({ apiKey: process.env.API_KEY || "" });
 
-const storySegmentSchema = {
+const responseSchema = {
     type: Type.OBJECT,
     properties: {
-        text: {
-            type: Type.STRING,
-            description: "The main narrative text for the current story segment. A single descriptive paragraph.",
+        id: { type: Type.STRING, description: 'A unique identifier for this story segment, like "market-ambush" or "data-heist-start".' },
+        text: { type: Type.STRING, description: 'The main narrative text describing the current scene, events, and atmosphere.' },
+        location: { type: Type.STRING, description: 'The name of the current location, e.g., "The Glitch Bar" or "Zentai Corp Tower".' },
+        choices: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: 'An array of 2-4 strings, representing the actions the player can take next.'
         },
-        location: {
+        imagePrompt: { type: Type.STRING, description: 'A concise prompt for an AI image generator to create a pixel art scene.' },
+        isCombat: { type: Type.BOOLEAN, description: 'Set to true if this segment is a combat encounter.' },
+        isEnd: { type: Type.BOOLEAN, description: 'Set to true if this is a game over or conclusion screen.' },
+        npc: {
             type: Type.OBJECT,
             properties: {
-                name: { type: Type.STRING, description: "The name of the current location." },
-                description: { type: Type.STRING, description: "A brief, one-sentence description of the location." },
-            },
-            required: ['name', 'description'],
-        },
-    },
-    required: ['text', 'location'],
-};
-
-const npcSchema = {
-    type: Type.OBJECT,
-    properties: {
-        name: {
-            type: Type.STRING,
-            description: "The NPC's name."
-        },
-        description: {
-            type: Type.STRING,
-            description: "A one-sentence physical description of the NPC."
-        },
-        dialogue: {
-            type: Type.OBJECT,
-            properties: {
-                openingLine: {
-                    type: Type.STRING,
-                    description: "The first thing the NPC says to the player."
-                },
-                choices: {
-                    type: Type.ARRAY,
-                    items: {
-                        type: Type.OBJECT,
-                        properties: {
-                            text: { type: Type.STRING, description: "The player's dialogue option." },
-                            response: { type: Type.STRING, description: "The NPC's response to that option." }
-                        },
-                        required: ["text", "response"]
-                    }
+                name: { type: Type.STRING },
+                description: { type: Type.STRING },
+                dialogue: {
+                    type: Type.OBJECT,
+                    properties: {
+                        openingLine: { type: Type.STRING },
+                        choices: {
+                            type: Type.ARRAY,
+                            items: {
+                                type: Type.OBJECT,
+                                properties: {
+                                    text: { type: Type.STRING },
+                                    response: { type: Type.STRING }
+                                },
+                                required: ['text', 'response']
+                            }
+                        }
+                    },
+                    required: ['openingLine', 'choices']
                 }
             },
-            required: ["openingLine", "choices"]
+            required: ['name', 'description', 'dialogue']
+        },
+        enemy: {
+            type: Type.OBJECT,
+            properties: {
+                name: { type: Type.STRING },
+                description: { type: Type.STRING },
+                hp: { type: Type.INTEGER },
+                maxHp: { type: Type.INTEGER },
+                attack: { type: Type.INTEGER }
+            },
+            required: ['name', 'description', 'hp', 'maxHp', 'attack']
+        },
+        playerUpdate: {
+            type: Type.OBJECT,
+            properties: {
+                hp: { type: Type.INTEGER, description: "The player's new HP, if it changed." },
+                credits: { type: Type.INTEGER, description: "The player's new credit amount, if it changed." }
+            }
         }
     },
-    required: ["name", "description", "dialogue"]
+    required: ['id', 'text', 'location', 'choices', 'imagePrompt']
 };
 
 
-export const generateInitialStory = async (archetype: Archetype, faction: Faction): Promise<StorySegment> => {
-    const prompt = `${INITIAL_PROMPT}\n\nArchetype: ${archetype}\nFaction: ${faction}`;
-    
+export const getNextStorySegment = async (currentState: GameState, playerChoice: string): Promise<StorySegment> => {
     try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-            model,
+        const model = 'gemini-2.5-pro'; // Good for complex reasoning and JSON generation
+
+        const prompt = `
+            PREVIOUS STORY:
+            ${currentState.history.slice(-3).join('\n---\n')}
+
+            CURRENT GAME STATE:
+            Player: { archetype: ${currentState.player.archetype}, faction: ${currentState.player.faction}, hp: ${currentState.player.hp}, credits: ${currentState.player.credits} }
+            Location: ${currentState.currentSegment.location}
+            
+            PLAYER'S ACTION: "${playerChoice}"
+
+            Generate the next part of the story.
+        `;
+        
+        const response = await ai.models.generateContent({
+            model: model,
             contents: prompt,
             config: {
+                systemInstruction: SYSTEM_INSTRUCTION,
                 responseMimeType: 'application/json',
-                responseSchema: storySegmentSchema
-            },
+                responseSchema: responseSchema,
+                temperature: 0.8,
+            }
         });
-        
-        const jsonText = response.text.trim();
-        const data = JSON.parse(jsonText);
 
-        return {
-            id: crypto.randomUUID(),
-            text: data.text,
-            location: data.location,
-        };
+        const jsonText = response.text.trim();
+        // The API returns a JSON string, parse it.
+        const nextSegment = JSON.parse(jsonText) as StorySegment;
+        
+        return nextSegment;
 
     } catch (error) {
-        console.error("Error generating initial story:", error);
-        throw new Error("Failed to start the story. The AI is offline.");
-    }
-};
-
-export const generateNpcForSegment = async (storyText: string): Promise<Npc> => {
-     const prompt = `${NPC_GENERATION_PROMPT}\n\nCurrent Scene: ${storyText}`;
-
-    try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: npcSchema
-            },
-        });
-        
-        const jsonText = response.text.trim();
-        const data = JSON.parse(jsonText);
-
-        return data as Npc;
-
-    } catch (error) {
-        console.error("Error generating NPC:", error);
-        throw new Error("Failed to create a character. The AI is distracted.");
-    }
-};
-
-export const continueStory = async (history: StorySegment[], playerChoice: string): Promise<StorySegment> => {
-    const context = history.map(seg => seg.text).join('\n\n');
-    const prompt = `${STORY_CONTINUATION_PROMPT}\n\nStory so far:\n${context}\n\nPlayer's last action: ${playerChoice}`;
-    
-    try {
-        const response: GenerateContentResponse = await ai.models.generateContent({
-            model,
-            contents: prompt,
-            config: {
-                responseMimeType: 'application/json',
-                responseSchema: storySegmentSchema
-            },
-        });
-        
-        const jsonText = response.text.trim();
-        const data = JSON.parse(jsonText);
-        
-        return {
-            id: crypto.randomUUID(),
-            text: data.text,
-            location: data.location,
-        };
-    } catch (error)
-        console.error("Error continuing story:", error);
-        throw new Error("Failed to continue the story. The AI has lost the thread.");
+        console.error("Error generating story segment:", error);
+        throw new Error("Failed to generate the next part of the story. The AI might be offline or the response was invalid.");
     }
 };

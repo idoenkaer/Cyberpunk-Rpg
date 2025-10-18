@@ -92,7 +92,8 @@ export const getNextStorySegment = async (currentState: GameState, playerChoice:
         
         const response = await ai.models.generateContent({
             model: model,
-            contents: [{ parts: [{ text: prompt }] }],
+            // FIX: Simplified `contents` to a string for a text-only prompt, following API guidelines.
+            contents: prompt,
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
                 responseMimeType: 'application/json',

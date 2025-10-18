@@ -26,6 +26,7 @@ const responseSchema = {
             properties: {
                 name: { type: Type.STRING },
                 description: { type: Type.STRING },
+                emotion: { type: Type.STRING, description: "The NPC's current emotion: 'neutral', 'happy', 'angry', 'sad', or 'scared'." },
                 dialogue: {
                     type: Type.OBJECT,
                     properties: {
@@ -45,7 +46,7 @@ const responseSchema = {
                     required: ['openingLine', 'choices']
                 }
             },
-            required: ['name', 'description', 'dialogue']
+            // Note: NPC itself is not required for a segment
         },
         enemy: {
             type: Type.OBJECT,
@@ -54,7 +55,8 @@ const responseSchema = {
                 description: { type: Type.STRING },
                 hp: { type: Type.INTEGER },
                 maxHp: { type: Type.INTEGER },
-                attack: { type: Type.INTEGER }
+                attack: { type: Type.INTEGER },
+                emotion: { type: Type.STRING, description: "The enemy's current emotion: 'neutral', 'angry', or 'scared'." }
             },
             required: ['name', 'description', 'hp', 'maxHp', 'attack']
         },
@@ -72,7 +74,8 @@ const responseSchema = {
 
 export const getNextStorySegment = async (currentState: GameState, playerChoice: string): Promise<StorySegment> => {
     try {
-        const model = 'gemini-2.5-pro'; // Good for complex reasoning and JSON generation
+        // Fix: Use correct model name 'gemini-2.5-pro' for complex reasoning and JSON generation
+        const model = 'gemini-2.5-pro'; 
 
         const prompt = `
             PREVIOUS STORY:
@@ -89,7 +92,7 @@ export const getNextStorySegment = async (currentState: GameState, playerChoice:
         
         const response = await ai.models.generateContent({
             model: model,
-            contents: prompt,
+            contents: [{ parts: [{ text: prompt }] }],
             config: {
                 systemInstruction: SYSTEM_INSTRUCTION,
                 responseMimeType: 'application/json',
@@ -97,7 +100,8 @@ export const getNextStorySegment = async (currentState: GameState, playerChoice:
                 temperature: 0.8,
             }
         });
-
+        
+        // Fix: Correctly access the text response from the Gemini API result.
         const jsonText = response.text.trim();
         // The API returns a JSON string, parse it.
         const nextSegment = JSON.parse(jsonText) as StorySegment;

@@ -1,47 +1,41 @@
 
 import type { GameState, StorySegment } from './types';
 
-export const INITIAL_ARCHETYPE = 'Runner';
-export const INITIAL_FACTION = 'Street Ronin';
+export const SYSTEM_INSTRUCTION = `
+You are the Game Master for "Cyber-Saga Chronicles," a dark, gritty cyberpunk text-based RPG.
+Your primary role is to generate the next story segment in the game based on the player's state, history, and their most recent action.
+You MUST adhere strictly to the provided JSON schema for your response.
+Do NOT output any text, explanation, or markdown formatting outside of the JSON object.
 
-export const INITIAL_STORY_SEGMENT: StorySegment = {
-    id: 'start',
-    text: "The neon-drenched rain slickens the asphalt of Neo-Kyoto. You stand in a darkened alley, the hum of a distant mag-lev train echoing off the chrome towers. Your comm-link buzzes with a new gig. It's risky, it's high-stakes, but the pay is good. What's your first move?",
-    location: 'Neo-Kyoto Alley',
+Key Directives:
+1.  **Maintain Tone:** The world is dystopian, noir, and dangerous. Technology is both a tool and a curse. Corporations are law, and the streets are unforgiving. Use descriptive, evocative language.
+2.  **Be Dynamic:** The story should react logically to the player's choices. Their archetype and faction should influence outcomes and available options. A Netrunner might see a terminal to hack, while a Street Samurai sees a structural weakness to exploit.
+3.  **Control Pacing:** Mix exposition, dialogue, and action. Not every choice should lead to combat. Build suspense and present moral dilemmas.
+4.  **Enforce Consequences:** Actions have consequences. Failure should be possible. If player HP reaches 0, generate an 'isEnd: true' segment describing their demise. Success might reward them with credits or story progression.
+5.  **NPCs and Enemies:**
+    *   If an NPC is present, provide engaging dialogue. Their emotion should reflect the situation.
+    *   If it's a combat scene ('isCombat: true'), create a suitable enemy. The enemy's stats (HP, attack) should be balanced for a challenge.
+6.  **Choices:** Provide 2-4 distinct and interesting choices for the player. They should clearly state the intended action.
+7.  **Image Prompt:** The 'imagePrompt' must be a concise, descriptive phrase suitable for an AI image generator, capturing the essence of the scene in a "dystopian, pixel art, cyberpunk" style. Example: "A lone street samurai facing down a corporate security drone in a rain-slicked neon alley."
+8.  **Player Updates:** Only include the 'playerUpdate' object if the player's HP or credits actually change in this segment. Do not include it if there's no change.
+`;
+
+const INITIAL_STORY_SEGMENT: StorySegment = {
+    id: 'intro-awakening',
+    text: "Your head throbs. The bitter taste of synthetic coffee lingers in your mouth. You're slumped in a worn-out chair in your cramped hab-unit, the perpetual neon glow of Neo-Kyoto filtering through the grimy window. A message notification blinks on your outdated terminal. It's from your Fixer, a shadowy figure known only as 'Whisper'. The job is on.",
+    location: 'Your Hab-Unit',
     choices: [
-        'Check the job details on your comm-link.',
-        'Scan the alley for potential threats.',
-        'Head to the nearest noodle stand to gather intel.'
+        'Check the message from Whisper.',
+        'Stumble to the synth-coffee machine for another cup.',
+        'Look out the window at the city below.',
+        'Check your gear.'
     ],
-    imagePrompt: 'A dark, rainy alley in a futuristic cyberpunk city with neon signs reflecting on the wet ground. A lone figure stands in the shadows.',
+    imagePrompt: 'A cramped, messy room in a futuristic city, illuminated by neon signs from outside the window, a person sitting at a computer terminal.'
 };
 
-export const INITIAL_GAME_STATE: GameState = {
-    player: {
-        archetype: INITIAL_ARCHETYPE,
-        faction: INITIAL_FACTION,
-        hp: 100,
-        maxHp: 100,
-        credits: 500,
-    },
+export const INITIAL_GAME_STATE: Omit<GameState, 'player'> = {
     currentSegment: INITIAL_STORY_SEGMENT,
     history: [INITIAL_STORY_SEGMENT.text],
     isLoading: false,
     error: null,
 };
-
-export const SYSTEM_INSTRUCTION = `You are an expert storyteller and game master for a cyberpunk text-based adventure game called "Cyber-Saga Chronicles". Your goal is to create an immersive, engaging, and coherent narrative based on the player's choices.
-
-RULES:
-1.  **RESPONSE FORMAT:** ALWAYS respond with a single, valid JSON object that strictly adheres to the provided schema. Do not include any text, markdown formatting, or explanations outside of the JSON object.
-2.  **STORYTELLING:**
-    *   Craft vivid and descriptive text that brings the cyberpunk world to life. Use sensory details.
-    *   Maintain a consistent tone: gritty, noir, and futuristic.
-    *   Create compelling situations, interesting NPCs, and dangerous enemies.
-    *   The story should evolve logically based on the player's previous state and their chosen action.
-3.  **CHOICES:** Provide 2-4 distinct and meaningful choices for the player to make. Choices should lead to different outcomes and consequences.
-4.  **COMBAT:** If \`isCombat\` is true, the choices should be combat-oriented (e.g., "Fire your pistol", "Use cybernetic enhancement", "Take cover"). The story text should describe the combat action. Update enemy HP accordingly.
-5.  **NPCs & DIALOGUE:** If an NPC is present, create a simple but engaging dialogue tree for them with an opening line and 2-3 choices.
-6.  **IMAGE PROMPT:** Generate a concise, descriptive prompt for an AI image generator to create a pixel art scene that visually represents the current story segment. Focus on key elements, atmosphere, and character actions. Example: "A street samurai with a glowing katana facing off against a corporate security drone in a neon-lit market."
-7.  **GAME STATE AWARENESS:** Pay attention to the player's archetype and faction. Sometimes, offer unique choices or narrative details based on them.
-`;

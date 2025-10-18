@@ -1,158 +1,102 @@
 
-import React, { useState, useCallback, useEffect, useRef } from 'react';
-import { INITIAL_GAME_STATE } from './constants';
-import type { GameState } from './types';
-import { getNextStorySegment } from './services/geminiService';
+import React, { useState, useCallback, useEffect } from 'react';
 
+// Components
 import Header from './components/Header';
+import PlayerStatus from './components/PlayerStatus';
 import StoryDisplay from './components/StoryDisplay';
 import StoryControls from './components/StoryControls';
-import PlayerStatus from './components/PlayerStatus';
 import PixelArtCanvas from './components/PixelArtCanvas';
 import RainEffect from './components/RainEffect';
 import ProceduralMap from './components/ProceduralMap';
-import DialogueBox from './components/DialogueBox';
 import NpcPortraitCanvas from './components/NpcPortraitCanvas';
-import EnemyStatus from './components/EnemyStatus';
+import DialogueBox from './components/DialogueBox';
 import EnemyPortraitCanvas from './components/EnemyPortraitCanvas';
+import EnemyStatus from './components/EnemyStatus';
+import SceneBackground from './components/SceneBackground';
 
+// Types and Services
+import { getNextStorySegment } from './services/geminiService';
+import { INITIAL_GAME_STATE } from './constants';
+import type { GameState, Archetype, Faction, PlayerState } from './types';
 
-function App() {
-    const [gameState, setGameState] = useState<GameState>(INITIAL_GAME_STATE);
-    const [isMuted, setIsMuted] = useState(true);
-    const [isNpcTalking, setIsNpcTalking] = useState(false);
+// Audio
+const useAudio = (url: string, loop: boolean) => {
+    const [audio] = useState(new Audio(url));
+    const [playing, setPlaying] = useState(false);
 
-    const audioContextRef = useRef<AudioContext | null>(null);
-    const ambienceNodesRef = useRef<{ noiseSource?: AudioBufferSourceNode, humOscillator?: OscillatorNode, gainNode?: GainNode }>({});
-
-    // Initialize AudioContext
-    useEffect(() => {
-        if (!audioContextRef.current) {
-            try {
-                audioContextRef.current = new (window.AudioContext || (window as any).webkitAudioContext)();
-            } catch (e) {
-                console.warn("Web Audio API is not supported in this browser.");
-            }
-        }
-    }, []);
-
-    const playUiSound = useCallback(() => {
-        const context = audioContextRef.current;
-        if (!context || isMuted) return;
-        if (context.state === 'suspended') {
-            context.resume().catch(e => console.error("Audio context resume failed:", e));
-        }
-
-        const oscillator = context.createOscillator();
-        const gainNode = context.createGain();
-        oscillator.type = 'square';
-        oscillator.frequency.setValueAtTime(800, context.currentTime);
-        gainNode.gain.setValueAtTime(0.1, context.currentTime);
-        gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.1);
-        oscillator.connect(gainNode);
-        gainNode.connect(context.destination);
-        oscillator.start(context.currentTime);
-        oscillator.stop(context.currentTime + 0.1);
-    }, [isMuted]);
-
-    const startAmbience = useCallback(() => {
-        const context = audioContextRef.current;
-        if (!context || ambienceNodesRef.current.gainNode) return;
-        if (context.state === 'suspended') {
-            context.resume().catch(e => console.error("Audio context resume failed:", e));
-        }
-
-        const gainNode = context.createGain();
-        gainNode.gain.setValueAtTime(0, context.currentTime);
-
-        const humOscillator = context.createOscillator();
-        humOscillator.type = 'sine';
-        humOscillator.frequency.setValueAtTime(50, context.currentTime);
-
-        const bufferSize = context.sampleRate * 2;
-        const buffer = context.createBuffer(1, bufferSize, context.sampleRate);
-        const output = buffer.getChannelData(0);
-        for (let i = 0; i < bufferSize; i++) {
-            output[i] = Math.random() * 2 - 1;
-        }
-        const noiseSource = context.createBufferSource();
-        noiseSource.buffer = buffer;
-        noiseSource.loop = true;
-
-        const bandpass = context.createBiquadFilter();
-        bandpass.type = 'bandpass';
-        bandpass.frequency.value = 800;
-        bandpass.Q.value = 0.5;
-
-        humOscillator.connect(gainNode);
-        noiseSource.connect(bandpass);
-        bandpass.connect(gainNode);
-        gainNode.connect(context.destination);
-
-        humOscillator.start();
-        noiseSource.start();
-        gainNode.gain.exponentialRampToValueAtTime(0.08, context.currentTime + 1);
-
-        ambienceNodesRef.current = { noiseSource, humOscillator, gainNode };
-    }, []);
-    
-    const stopAmbience = useCallback(() => {
-        const nodes = ambienceNodesRef.current;
-        const context = audioContextRef.current;
-        if (nodes.gainNode && context) {
-            try {
-                nodes.gainNode.gain.exponentialRampToValueAtTime(0.0001, context.currentTime + 0.5);
-                
-                setTimeout(() => {
-                    if (ambienceNodesRef.current.gainNode) { 
-                        nodes.humOscillator?.stop();
-                        nodes.noiseSource?.stop();
-                        nodes.gainNode?.disconnect();
-                        ambienceNodesRef.current = {};
-                    }
-                }, 550);
-            } catch (e) {
-                console.error("Error stopping ambience:", e);
-                // Force cleanup if ramp fails
-                nodes.humOscillator?.stop();
-                nodes.noiseSource?.stop();
-                nodes.gainNode?.disconnect();
-                ambienceNodesRef.current = {};
-            }
-        }
-    }, []);
+    const toggle = () => setPlaying(!playing);
 
     useEffect(() => {
-        if (isMuted) {
-            stopAmbience();
-        } else {
-            startAmbience();
-        }
-    }, [isMuted, startAmbience, stopAmbience]);
+        audio.loop = loop;
+        playing ? audio.play().catch(e => console.error("Audio play failed", e)) : audio.pause();
+    }, [playing, audio, loop]);
 
-    // Cleanup on unmount
     useEffect(() => {
+        const handleEnded = () => setPlaying(false);
+        audio.addEventListener('ended', handleEnded);
         return () => {
-            stopAmbience();
+            audio.removeEventListener('ended', handleEnded);
+            audio.pause();
         };
-    }, [stopAmbience]);
+    }, [audio]);
+    
+    return [playing, toggle] as const;
+};
 
+
+const App: React.FC = () => {
+    const [gameState, setGameState] = useState<GameState | null>(null);
+    const [isMuted, setIsMuted] = useState(true); // Start muted by default
+    const [isTalking, setIsTalking] = useState(false);
+    
+    // In a real app, these would come from a public folder. Using a placeholder.
+    const [musicPlaying, toggleMusic] = useAudio('https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3', true);
+
+    useEffect(() => {
+        if (!isMuted && gameState) {
+            if (!musicPlaying) {
+                 (toggleMusic as () => void)();
+            }
+        } else {
+             if (musicPlaying) {
+                 (toggleMusic as () => void)();
+             }
+        }
+    }, [isMuted, gameState, musicPlaying, toggleMusic]);
+
+    const handleCharacterCreation = (archetype: Archetype, faction: Faction) => {
+        const playerState: PlayerState = {
+            archetype,
+            faction,
+            hp: 100,
+            maxHp: 100,
+            credits: 500,
+        };
+        setGameState({
+            player: playerState,
+            ...INITIAL_GAME_STATE,
+        });
+    };
 
     const handlePlayerChoice = useCallback(async (choice: string) => {
-        if (gameState.isLoading || gameState.currentSegment.isEnd) return;
-        
-        playUiSound();
+        if (!gameState || gameState.isLoading) return;
 
-        setGameState(prev => ({
-            ...prev,
-            isLoading: true,
-            history: [...prev.history, `> ${choice}`],
-        }));
+        setGameState(prev => {
+            if (!prev) return null;
+            return {
+                ...prev,
+                isLoading: true,
+                error: null,
+                history: [...prev.history, `> ${choice}`],
+            };
+        });
 
         try {
             const nextSegment = await getNextStorySegment(gameState, choice);
             
             setGameState(prev => {
+                if (!prev) return null;
                 const newPlayerState = { ...prev.player };
                 if (nextSegment.playerUpdate) {
                     if (nextSegment.playerUpdate.hp !== undefined) {
@@ -162,17 +106,8 @@ function App() {
                         newPlayerState.credits = nextSegment.playerUpdate.credits;
                     }
                 }
-
-                // If combat and enemy exists, player might lose HP from enemy attack
-                if (prev.currentSegment.isCombat && prev.currentSegment.enemy) {
-                    newPlayerState.hp -= prev.currentSegment.enemy.attack || 5;
-                }
                 
-                // Clamp HP
-                if (newPlayerState.hp < 0) newPlayerState.hp = 0;
-
                 return {
-                    ...prev,
                     player: newPlayerState,
                     currentSegment: nextSegment,
                     history: [...prev.history, `> ${choice}`, nextSegment.text],
@@ -183,84 +118,141 @@ function App() {
 
         } catch (error) {
             const errorMessage = error instanceof Error ? error.message : "An unknown error occurred.";
-            setGameState(prev => ({
-                ...prev,
-                isLoading: false,
-                error: errorMessage,
-            }));
+            setGameState(prev => {
+                if (!prev) return null;
+                return { ...prev, isLoading: false, error: errorMessage };
+            });
         }
-    }, [gameState, playUiSound]);
+    }, [gameState]);
     
     const handleRestart = () => {
-        playUiSound();
-        setGameState(INITIAL_GAME_STATE);
+        setGameState(null);
     }
     
+    if (!gameState) {
+        return (
+             <div className="bg-gray-900 text-gray-200 min-h-screen font-mono flex flex-col items-center justify-center p-4">
+                 <RainEffect />
+                 <div className="z-10 bg-black/50 p-8 border border-cyan-400/30 text-center max-w-2xl">
+                    <h1 className="text-4xl font-bold text-cyan-400 tracking-widest uppercase text-flicker mb-4">Cyber-Saga Chronicles</h1>
+                    <p className="mb-6 text-gray-400">The rain never stops in Neo-Kyoto. In the shadows of chrome towers, you carve out a living. Who are you?</p>
+                    
+                    <CharacterCreator onConfirm={handleCharacterCreation} />
+                 </div>
+            </div>
+        )
+    }
+
     const { player, currentSegment, history, isLoading, error } = gameState;
 
     return (
-        <div className="bg-gray-900 text-gray-200 font-mono min-h-screen flex flex-col items-center p-4 selection:bg-cyan-400/30">
+        <div className="bg-gray-900 text-gray-200 min-h-screen font-mono">
             <RainEffect />
-            <Header isMuted={isMuted} onToggleMute={() => setIsMuted(!isMuted)} />
-            
-            <main className="w-full max-w-7xl mx-auto grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4 flex-grow">
-                {/* Left Column */}
-                <aside className="lg:col-span-1 space-y-4 flex flex-col">
-                   <PlayerStatus player={player} />
-                   <div className="bg-black/30 p-4 border border-gray-700 flex flex-col items-center">
-                       <h2 className="text-lg text-cyan-400 mb-2 uppercase tracking-widest">Player Avatar</h2>
-                       <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
-                   </div>
-                   <div className="bg-black/30 p-4 border border-gray-700 flex flex-col items-center">
-                        <h2 className="text-lg text-cyan-400 mb-2 uppercase tracking-widest">{currentSegment.location}</h2>
-                        <ProceduralMap locationName={currentSegment.location} />
-                   </div>
-                   {currentSegment.enemy && (
-                        <>
-                           <EnemyStatus enemy={currentSegment.enemy} />
-                           <div className="bg-black/30 p-4 border border-gray-700 flex flex-col items-center">
-                                <h2 className="text-lg text-red-400 mb-2 uppercase tracking-widest">Enemy</h2>
-                                <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} />
+            <div className="max-w-7xl mx-auto p-4 relative z-10">
+                <Header isMuted={isMuted} onToggleMute={() => setIsMuted(!isMuted)} />
+
+                <main className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+                    {/* Left Column */}
+                    <div className="lg:col-span-1 space-y-4">
+                        <PlayerStatus player={player} />
+                        <div className="flex space-x-4">
+                           <PixelArtCanvas archetype={player.archetype} faction={player.faction} />
+                           <div className="flex-grow">
+                             <h3 className="text-sm text-gray-500 uppercase">Location</h3>
+                             <p className="text-lg text-cyan-400">{currentSegment.location}</p>
+                             <div className="mt-2">
+                                <ProceduralMap locationName={currentSegment.location} />
+                             </div>
                            </div>
-                        </>
-                   )}
-                </aside>
-
-                {/* Center Column */}
-                <div className={`lg:col-span-${currentSegment.npc ? '1' : '2'} flex flex-col`}>
-                    <div className="bg-black/30 p-4 border border-gray-700 flex-grow">
-                        <StoryDisplay history={history} isLoading={isLoading} />
+                        </div>
+                         {currentSegment.enemy && <EnemyStatus enemy={currentSegment.enemy} />}
                     </div>
-                     <div className="mt-4">
-                         <StoryControls 
-                             choices={currentSegment.choices}
-                             onChoice={handlePlayerChoice}
-                             isLoading={isLoading}
-                             isEnd={!!currentSegment.isEnd}
-                             onRestart={handleRestart}
-                             error={error}
-                         />
-                     </div>
-                </div>
 
-                {/* Right Column (for NPC interaction) */}
-                {currentSegment.npc && !currentSegment.isCombat && (
-                     <aside className="lg:col-span-1 space-y-4 flex flex-col">
-                         <div className="bg-black/30 p-4 border border-gray-700 flex flex-col items-center">
-                             <h2 className="text-lg text-fuchsia-400 mb-2 uppercase tracking-widest">{currentSegment.npc.name}</h2>
-                            <NpcPortraitCanvas npcName={currentSegment.npc.name} isTalking={isNpcTalking} />
-                            <p className="text-center text-sm text-gray-400 mt-2 italic">{currentSegment.npc.description}</p>
-                         </div>
-                         <div className="flex-grow">
-                            <DialogueBox 
-                                dialogue={currentSegment.npc.dialogue} 
-                                onTalkStart={() => setIsNpcTalking(true)}
-                                onTalkEnd={() => setIsNpcTalking(false)}
-                            />
-                         </div>
-                     </aside>
+                    {/* Middle Column */}
+                    <div className="lg:col-span-2 space-y-4">
+                        <div className="relative h-[400px] lg:h-[calc(100%-250px)] bg-black/30 p-4 border border-gray-700">
+                             <SceneBackground imagePrompt={currentSegment.imagePrompt} />
+                             <StoryDisplay history={history} isLoading={isLoading} />
+                        </div>
+                        <StoryControls 
+                            choices={currentSegment.choices} 
+                            onChoice={handlePlayerChoice} 
+                            isLoading={isLoading || isTalking} 
+                            isEnd={!!currentSegment.isEnd}
+                            onRestart={handleRestart}
+                            error={error}
+                        />
+                    </div>
+                </main>
+                 {/* Dialogue/Enemy Overlay */}
+                 {(currentSegment.npc || currentSegment.enemy) && (
+                    <aside className="grid grid-cols-1 lg:grid-cols-3 gap-4 mt-4">
+                        <div className="lg:col-start-2 lg:col-span-2">
+                             <div className="grid grid-cols-3 gap-4">
+                                <div className="col-span-1 flex items-center justify-center">
+                                    {currentSegment.npc && <NpcPortraitCanvas npcName={currentSegment.npc.name} emotion={currentSegment.npc.emotion} />}
+                                    {currentSegment.enemy && <EnemyPortraitCanvas enemyName={currentSegment.enemy.name} emotion={currentSegment.enemy.emotion} />}
+                                </div>
+                                <div className="col-span-2">
+                                    {currentSegment.npc && <DialogueBox dialogue={currentSegment.npc.dialogue} onTalkStart={() => setIsTalking(true)} onTalkEnd={() => setIsTalking(false)} />}
+                                </div>
+                            </div>
+                        </div>
+                    </aside>
                 )}
-            </main>
+            </div>
+        </div>
+    );
+};
+
+
+const CharacterCreator: React.FC<{ onConfirm: (archetype: Archetype, faction: Faction) => void }> = ({ onConfirm }) => {
+    const [archetype, setArchetype] = useState<Archetype>('Runner');
+    const [faction, setFaction] = useState<Faction>('Street Ronin');
+
+    const archetypes: { name: Archetype; desc: string }[] = [
+        { name: 'Runner', desc: 'A versatile operative, balancing combat, tech, and street smarts.' },
+        { name: 'Netrunner', desc: 'A master of the virtual world, hacking systems and bending data to their will.' },
+        { name: 'Street Samurai', desc: 'A cybernetically-enhanced warrior, living and dying by the blade.' },
+        { name: 'Corporate Drone', desc: 'A cog in the machine who has decided to break the pattern.' },
+        { name: 'Techie', desc: 'A brilliant engineer who can build, modify, or break any piece of hardware.' },
+        { name: 'Fixer', desc: 'A well-connected broker of information, gear, and jobs.' }
+    ];
+
+    const factions: { name: Faction; desc: string }[] = [
+        { name: 'Corporate Enforcers', desc: 'Loyal to the megacorps, you uphold the iron-fisted law of the powerful.' },
+        { name: 'Hacker Collective', desc: 'Information wants to be free, and you\'re the one to set it loose.' },
+        { name: 'Street Ronin', desc: 'Bound by a personal code of honor in a city that has none.' },
+        { name: 'Police', desc: 'Trying to keep the peace on streets where peace is just a memory.' }
+    ];
+
+    return (
+        <div className="space-y-6">
+            <div>
+                <h3 className="text-lg text-fuchsia-400 mb-2">[ SELECT ARCHETYPE ]</h3>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                    {archetypes.map(a => (
+                        <button key={a.name} onClick={() => setArchetype(a.name)} className={`p-2 border-2 transition-colors ${archetype === a.name ? 'border-cyan-400 bg-cyan-900/50' : 'border-gray-700 hover:bg-gray-800'}`}>
+                            {a.name}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-sm text-gray-400 mt-2 h-10">{archetypes.find(a => a.name === archetype)?.desc}</p>
+            </div>
+            <div>
+                <h3 className="text-lg text-fuchsia-400 mb-2">[ SELECT FACTION ]</h3>
+                 <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
+                    {factions.map(f => (
+                        <button key={f.name} onClick={() => setFaction(f.name)} className={`p-2 border-2 transition-colors ${faction === f.name ? 'border-cyan-400 bg-cyan-900/50' : 'border-gray-700 hover:bg-gray-800'}`}>
+                            {f.name}
+                        </button>
+                    ))}
+                </div>
+                <p className="text-sm text-gray-400 mt-2 h-10">{factions.find(f => f.name === faction)?.desc}</p>
+            </div>
+            <button onClick={() => onConfirm(archetype, faction)} className="w-full text-lg bg-cyan-600/50 hover:bg-cyan-500/50 text-white font-bold py-3 px-4 border-b-4 border-cyan-800/50 hover:border-cyan-700/50 rounded transition-colors duration-200">
+                [ JACK IN ]
+            </button>
         </div>
     );
 }

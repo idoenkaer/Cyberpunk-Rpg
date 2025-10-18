@@ -1,10 +1,10 @@
-
-export type Archetype = 'Runner' | 'Netrunner' | 'Street Samurai' | 'Corporate Drone';
+export type Archetype = 'Runner' | 'Netrunner' | 'Street Samurai' | 'Corporate Drone' | 'Techie' | 'Fixer';
 export type Faction = 'Corporate Enforcers' | 'Hacker Collective' | 'Street Ronin' | 'Police';
+export type Emotion = 'neutral' | 'happy' | 'angry' | 'sad' | 'scared';
 
 export interface Choice {
     text: string;
-    response: string; // This is what the NPC says if you choose this.
+    response: string;
 }
 
 export interface DialogueTree {
@@ -16,6 +16,7 @@ export interface NPC {
     name: string;
     description: string;
     dialogue: DialogueTree;
+    emotion?: Emotion;
 }
 
 export interface Enemy {
@@ -24,6 +25,7 @@ export interface Enemy {
     hp: number;
     maxHp: number;
     attack: number;
+    emotion?: Emotion;
 }
 
 export interface PlayerState {

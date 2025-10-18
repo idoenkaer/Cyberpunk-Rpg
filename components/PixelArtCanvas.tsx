@@ -1,4 +1,3 @@
-
 // components/PixelArtCanvas.tsx
 import React, { useEffect, useRef } from 'react';
 import type { Archetype, Faction } from '../types';
@@ -32,6 +31,12 @@ const PALETTE = {
     samurai_scar: '#c78d81',
     corp_suit: '#3d4a5e', corp_suit_lapel: '#4a5a6e', corp_suit_shadow: '#2c3645',
     corp_tie: '#c0392b',
+    
+    techie_overalls: '#3b5998', techie_overalls_shadow: '#2a3f6b',
+    techie_tools: '#b0b0b0',
+    fixer_coat: '#6d2121', fixer_coat_shadow: '#4a1717',
+    fixer_hat: '#3d1a1a',
+
     white: '#ffffff',
     muzzle_flash: '#fff38a',
     spark: '#ffc83d',
@@ -271,6 +276,53 @@ const PixelArtCanvas: React.FC<PixelArtCanvasProps> = ({ archetype, faction }) =
                         }
                     }
                     break;
+                 }
+                 case 'Techie': {
+                    const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
+                    // Overalls
+                    baseCtx.fillStyle = PALETTE.techie_overalls_shadow;
+                    baseCtx.fillRect(16, 28, 32, 32);
+                    baseCtx.fillStyle = PALETTE.techie_overalls;
+                    baseCtx.fillRect(18, 28, 28, 30);
+                    // Tools on shoulder
+                    baseCtx.fillStyle = PALETTE.techie_tools;
+                    baseCtx.fillRect(14, 24, 4, 8);
+                    baseCtx.fillRect(46, 24, 4, 8);
+                    drawFactionLogo(20, 32, faction);
+                    drawHead(0, headTilt, expression);
+                    // Deploy drone action
+                     if (state === 'ACTION') {
+                        const droneX = 10 + progress * 40;
+                        const droneY = 30 - Math.sin(progress * Math.PI) * 15;
+                        glowCtx.fillStyle = PALETTE.runner_eye_glow;
+                        glowCtx.fillRect(droneX, droneY, 8, 4);
+                        glowCtx.fillStyle = PALETTE.techie_tools;
+                        glowCtx.fillRect(droneX + 2, droneY-2, 4, 8);
+                    }
+                    break;
+                 }
+                 case 'Fixer': {
+                     const headTilt = state === 'IDLE' ? Math.cos(elapsedTimeRef.current / 1000) * 1 : 0;
+                     // Dark Coat
+                     baseCtx.fillStyle = PALETTE.fixer_coat_shadow;
+                     baseCtx.fillRect(14, 24, 36, 36);
+                     baseCtx.fillStyle = PALETTE.fixer_coat;
+                     baseCtx.fillRect(16, 24, 32, 34);
+                     // Hat
+                     baseCtx.fillStyle = PALETTE.fixer_hat;
+                     baseCtx.fillRect(20 + headTilt, 6, 24, 8);
+                     baseCtx.fillRect(18 + headTilt, 10, 28, 4);
+                     drawFactionLogo(40, 30, faction);
+                     // Shadowed Face
+                     baseCtx.fillStyle = PALETTE.skin_shadow;
+                     baseCtx.fillRect(26 + headTilt, 14, 12, 10);
+                     // Action: Smoke puff
+                      if (state === 'ACTION' && progress < 0.5) {
+                         const alpha = (0.5 - progress) * 2;
+                         glowCtx.fillStyle = `rgba(200, 200, 200, ${alpha})`;
+                         glowCtx.fillRect(20, 15, 8, 8);
+                      }
+                     break;
                  }
             }
             

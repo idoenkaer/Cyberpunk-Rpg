@@ -1,7 +1,6 @@
 import React from 'react';
 // Fix: Corrected import path for types module.
 import type { Enemy } from '../types';
-import EnemyPortraitCanvas from './EnemyPortraitCanvas';
 
 interface EnemyStatusProps {
     enemy: Enemy;
@@ -10,20 +9,16 @@ interface EnemyStatusProps {
 const HealthBar: React.FC<{ value: number, max: number }> = ({ value, max }) => {
     const percentage = max > 0 ? (value / max) * 100 : 0;
     return (
-        <div className="w-full bg-gray-700/50 rounded-full h-4 border border-gray-600">
-            <div 
-                className="bg-red-500 h-full rounded-full transition-all duration-500"
-                style={{ width: `${percentage}%` }}
-            ></div>
+        <div className="pixel-health-bar pixel-health-bar--enemy">
+            <div style={{ width: `${percentage}%` }}></div>
         </div>
     );
 };
 
 const EnemyStatus: React.FC<EnemyStatusProps> = ({ enemy }) => {
     return (
-        <div className="bg-black/30 p-4 border border-red-900/50 flex flex-col items-center">
-            <EnemyPortraitCanvas enemyName={enemy.name} emotion={enemy.emotion} />
-            <h2 className="text-lg text-red-400 mt-3 mb-2 uppercase tracking-widest">{enemy.name}</h2>
+        <div className="bg-black/50 p-4 pixel-border pixel-border--red w-full sm:w-auto md:max-w-xs">
+            <h2 className="text-lg text-red-400 mt-1 mb-2 uppercase tracking-widest text-center">{enemy.name}</h2>
             <div className="space-y-2 text-gray-300 w-full">
                 <p className="text-sm text-gray-400 italic pt-1 text-center">{enemy.description}</p>
                 <div className="pt-2">

@@ -1,3 +1,4 @@
+
 // App.tsx
 import React, { useState, useCallback, useMemo } from 'react';
 import Header from './components/Header';
@@ -5,11 +6,12 @@ import PlayerStatus from './components/PlayerStatus';
 import EnemyStatus from './components/EnemyStatus';
 import StoryDisplay from './components/StoryDisplay';
 import StoryControls from './components/StoryControls';
-import SceneBackground from './components/SceneBackground';
 import RainEffect from './components/RainEffect';
 import CharacterCreation from './components/CharacterCreation';
+import DialogueBox from './components/DialogueBox';
+import GameView from './components/GameView';
 import { getNextGameState } from './services/geminiService';
-import type { GameState, GeminiResponse, Player } from './types';
+import type { GameState, GeminiResponse, Player, DialogueEntry } from './types';
 
 const INITIAL_GAME_STATE: GameState = {
     player: {
@@ -23,9 +25,10 @@ const INITIAL_GAME_STATE: GameState = {
     },
     currentEnemy: null,
     currentNpc: null,
-    sceneDescription: 'You are standing at a terminal, ready to jack into the Cyber-Saga. What is your name?',
+    sceneDescription: 'You are standing at a terminal, ready to jack into Deksamnu. What is your name?',
     imagePrompt: 'A futuristic computer terminal with a glowing screen asking for a name. Cyberpunk aesthetic.',
     history: [],
+    conversationHistory: [],
     actions: ["Create Character"],
     gameState: 'characterCreation',
     itemOnGround: null,
@@ -44,7 +47,23 @@ function App() {
 
         // Create a temporary state for the user action to appear immediately
         const currentHistory = [...gameState.history, `> ${action}`];
-        setGameState(prev => ({ ...prev, history: currentHistory, itemOnGround: null }));
+        
+        // Optimistically update conversation history if in dialogue
+        let currentConversationHistory = [...gameState.conversationHistory];
+        if (gameState.gameState === 'dialogue') {
+            currentConversationHistory.push({
+                speaker: gameState.player.name,
+                text: action,
+                timestamp: Date.now()
+            });
+        }
+
+        setGameState(prev => ({ 
+            ...prev, 
+            history: currentHistory, 
+            conversationHistory: currentConversationHistory,
+            itemOnGround: null 
+        }));
 
         const response = await getNextGameState(gameState, action);
 
@@ -115,6 +134,25 @@ function App() {
                 npc = { ...prev.currentNpc, ...response.npcUpdate };
             }
             
+            // Handle conversation history
+            let newConversationHistory = [...prev.conversationHistory];
+            if (response.gameState === 'dialogue') {
+                // If entering dialogue from a different state, start fresh or continue
+                // Ideally, we reset if it's a new encounter, but checking 'prev.gameState' is a decent proxy.
+                if (prev.gameState !== 'dialogue') {
+                    newConversationHistory = [];
+                }
+
+                const npcName = response.newNpc?.name || npc?.name || 'Unknown';
+                if (response.sceneDescription) {
+                    newConversationHistory.push({
+                        speaker: npcName,
+                        text: response.sceneDescription,
+                        timestamp: Date.now()
+                    });
+                }
+            }
+
             // Ensure inventory is always an array
             if (!Array.isArray(newPlayerState.inventory)) {
                 newPlayerState.inventory = prev.player.inventory || [];
@@ -128,6 +166,7 @@ function App() {
                 sceneDescription: response.sceneDescription,
                 imagePrompt: response.imagePrompt,
                 history: newHistory,
+                conversationHistory: newConversationHistory,
                 actions: response.actions,
                 gameState: response.gameState,
                 itemOnGround: response.item || null,
@@ -178,51 +217,93 @@ function App() {
         };
     }, [gameState.aiCorruption]);
 
+    // Determine weather condition based on AI Corruption
+    const weatherCondition = useMemo(() => {
+        if (gameState.aiCorruption >= 30) {
+            return 'acidRain';
+        } else if (gameState.aiCorruption >= 10) {
+            return 'fog';
+        } else {
+            return 'rain';
+        }
+    }, [gameState.aiCorruption]);
+
     const renderGameUI = () => (
-        <main className="grid grid-cols-1 md:grid-cols-4 gap-4 p-4 h-[calc(100vh-81px)]">
-            <div className="md:col-span-1 flex flex-col gap-4">
-                <PlayerStatus player={gameState.player} />
-                {gameState.currentEnemy && <EnemyStatus enemy={gameState.currentEnemy} />}
-            </div>
-            <div className="md:col-span-2 flex flex-col bg-black/30 border border-cyan-900/50">
-                <div className="flex-grow p-4 overflow-hidden">
-                    <StoryDisplay
-                        history={gameState.history}
-                        isLoading={isLoading}
-                        itemOnGround={gameState.itemOnGround}
-                        onTakeItem={handleTakeItem}
-                    />
-                </div>
-                <StoryControls
-                    actions={gameState.actions}
-                    onAction={handlePlayerAction}
-                    isLoading={isLoading}
+        <div className="relative w-full h-full flex flex-col overflow-hidden">
+            {/* Game background and sprites */}
+            <div className="absolute inset-0 z-0">
+                <GameView
+                    imagePrompt={gameState.imagePrompt}
+                    player={gameState.player}
+                    enemy={gameState.currentEnemy}
+                    npc={gameState.currentNpc}
                 />
             </div>
-            <div className="md:col-span-1">
-                <SceneBackground imagePrompt={gameState.imagePrompt} />
+
+            {/* Top Status Bar - responsive flex container */}
+            <div className="relative z-10 p-2 sm:p-4 flex flex-col sm:flex-row justify-between items-start gap-4 w-full">
+                <div className="w-full sm:w-auto flex-shrink-0">
+                    <PlayerStatus player={gameState.player} />
+                </div>
+                {gameState.currentEnemy && (
+                    <div className="w-full sm:w-auto flex-shrink-0 sm:self-start">
+                        <EnemyStatus enemy={gameState.currentEnemy} />
+                    </div>
+                )}
             </div>
-        </main>
+
+            {/* Bottom Controls and Story Display */}
+            <div className="relative z-10 mt-auto p-2 sm:p-4 w-full md:max-w-5xl md:mx-auto">
+                 <div className="bg-black/60 pixel-border p-2 sm:p-4 flex flex-col md:flex-row gap-4 h-full max-h-[50vh]">
+                    <div className="flex-grow w-full md:w-2/3 max-h-[60%] md:max-h-full"> {/* flex-grow to take available height */}
+                        <StoryDisplay
+                            history={gameState.history}
+                            isLoading={isLoading}
+                            itemOnGround={gameState.itemOnGround}
+                            onTakeItem={handleTakeItem}
+                        />
+                    </div>
+                     <div className="flex-shrink-0 w-full md:w-1/3 max-h-[40%] md:max-h-full overflow-y-auto custom-scrollbar-thin">
+                        <StoryControls
+                            actions={gameState.gameState === 'dialogue' ? [] : gameState.actions}
+                            onAction={handlePlayerAction}
+                            isLoading={isLoading && gameState.gameState !== 'dialogue'}
+                        />
+                    </div>
+                 </div>
+            </div>
+        </div>
     );
 
     return (
-        <div className="bg-gray-900 text-white font-mono min-h-screen bg-cover bg-center relative">
-            <RainEffect />
+        <div className="bg-gray-900 text-white font-mono h-screen flex flex-col">
+            <RainEffect weatherCondition={weatherCondition} aiCorruption={gameState.aiCorruption} />
             <div 
-                className="relative z-10 bg-black/50 min-h-screen transition-all duration-1000"
+                className="relative z-10 bg-black/50 flex flex-col flex-grow"
                 style={corruptionStyle as React.CSSProperties}
             >
                 <Header />
-                {gameState.gameState === 'characterCreation' ? (
-                    <CharacterCreation onCharacterCreate={handleCharacterCreate} />
-                ) : (
-                    renderGameUI()
-                )}
-                 {gameState.aiCorruption > 10 && (
-                    <div className="fixed bottom-2 right-2 text-xs text-red-500/50 animate-pulse font-mono">
-                        SYSTEM INSTABILITY DETECTED: {gameState.aiCorruption}
-                    </div>
-                )}
+                <div className="flex-grow relative overflow-hidden">
+                    {gameState.gameState === 'characterCreation' ? (
+                        <CharacterCreation onCharacterCreate={handleCharacterCreate} />
+                    ) : (
+                        renderGameUI()
+                    )}
+                    {gameState.gameState === 'dialogue' && gameState.currentNpc && (
+                        <DialogueBox
+                            npc={gameState.currentNpc}
+                            conversationHistory={gameState.conversationHistory}
+                            actions={gameState.actions}
+                            onAction={handlePlayerAction}
+                            isLoading={isLoading}
+                        />
+                    )}
+                    {gameState.aiCorruption > 10 && (
+                        <div className="fixed bottom-2 right-2 text-xs text-red-500/50 animate-pulse font-mono z-50">
+                            SYSTEM INSTABILITY DETECTED: {gameState.aiCorruption}
+                        </div>
+                    )}
+                </div>
             </div>
         </div>
     );

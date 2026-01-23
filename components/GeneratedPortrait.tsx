@@ -1,8 +1,11 @@
+// components/GeneratedPortrait.tsx
 import React, { useState, useEffect } from 'react';
 import { GoogleGenAI, Modality } from '@google/genai';
 
-interface SceneBackgroundProps {
-    imagePrompt: string;
+interface GeneratedPortraitProps {
+    prompt: string;
+    alt: string;
+    cacheKey: string;
 }
 
 // Per instructions, API key is from process.env.API_KEY
@@ -11,18 +14,17 @@ const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 // In-memory cache for generated images
 const imageCache = new Map<string, string>();
 
-const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
+const GeneratedPortrait: React.FC<GeneratedPortraitProps> = ({ prompt, alt, cacheKey }) => {
     const [imageUrl, setImageUrl] = useState<string | null>(null);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
 
     useEffect(() => {
         const generateImage = async () => {
-            if (!imagePrompt) return;
+            if (!prompt || !cacheKey) return;
 
-            // Check cache first
-            if (imageCache.has(imagePrompt)) {
-                setImageUrl(imageCache.get(imagePrompt)!);
+            if (imageCache.has(cacheKey)) {
+                setImageUrl(imageCache.get(cacheKey)!);
                 setIsLoading(false);
                 setError(null);
                 return;
@@ -33,15 +35,15 @@ const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
             
             try {
                 const response = await ai.models.generateContent({
-                    model: 'gemini-2.5-flash-image', // Model for image generation
+                    model: 'gemini-2.5-flash-image',
                     contents: {
-                        parts: [{ text: imagePrompt }],
+                        parts: [{ text: prompt }],
                     },
                     config: {
                         responseModalities: [Modality.IMAGE],
                     },
                 });
-                
+
                 let foundImage = false;
                 const candidate = response.candidates?.[0];
 
@@ -50,25 +52,25 @@ const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
                         if (part.inlineData) {
                             const base64ImageBytes: string = part.inlineData.data;
                             const generatedUrl = `data:image/png;base64,${base64ImageBytes}`;
-                            imageCache.set(imagePrompt, generatedUrl); // Save to cache
+                            imageCache.set(cacheKey, generatedUrl);
                             setImageUrl(generatedUrl);
                             foundImage = true;
-                            break; // Assume one image
+                            break; 
                         }
                     }
                 }
 
-                if (!foundImage) {
+                 if (!foundImage) {
                     throw new Error("No image data received from API or response was blocked.");
                 }
 
             } catch (e) {
-                console.error("Failed to generate scene background:", e);
+                console.error("Failed to generate portrait:", e);
                 const errorMessage = e instanceof Error ? e.message : String(e);
                 if (errorMessage.includes("429") || errorMessage.includes("RESOURCE_EXHAUSTED")) {
-                    setError("Matrix connection unstable: Rate limit exceeded.");
+                    setError("RATE LIMIT EXCEEDED");
                 } else {
-                    setError("Could not render scene. Connection to vision matrix failed.");
+                    setError("VISUAL LINK FAILED");
                 }
             } finally {
                 setIsLoading(false);
@@ -76,26 +78,26 @@ const SceneBackground: React.FC<SceneBackgroundProps> = ({ imagePrompt }) => {
         };
 
         generateImage();
-    }, [imagePrompt]);
+    }, [prompt, cacheKey]);
 
     const content = () => {
         if (isLoading) {
-            return <div className="text-cyan-400 animate-pulse">[Rendering Visuals...]</div>;
+            return <div className="text-cyan-400 text-xs animate-pulse text-center p-2">[Rendering ID...]</div>;
         }
         if (error) {
-            return <div className="text-red-400 p-2 text-center">{error}</div>;
+            return <div className="text-red-400 text-xs text-center p-2">{error}</div>;
         }
         if (imageUrl) {
-            return <img src={imageUrl} alt={imagePrompt} className="w-full h-full object-cover" />;
+            return <img src={imageUrl} alt={alt} className="w-36 h-36 object-cover" style={{ imageRendering: 'pixelated' }} />;
         }
-        return <div className="text-gray-500">[No Visuals]</div>;
+        return <div className="w-36 h-36 bg-black flex items-center justify-center text-gray-500 text-xs text-center p-2">[No Signal]</div>;
     };
 
     return (
-        <div className="bg-black/30 pixel-border pixel-border--grey w-full h-full flex items-center justify-center">
+        <div className="w-36 h-36 bg-black/50 pixel-border flex items-center justify-center">
             {content()}
         </div>
     );
 };
 
-export default SceneBackground;
+export default GeneratedPortrait;

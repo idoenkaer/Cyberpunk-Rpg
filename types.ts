@@ -1,8 +1,15 @@
+
 // types.ts
 
 export type Rarity = 'Common' | 'Uncommon' | 'Rare';
 export type Emotion = 'neutral' | 'happy' | 'angry' | 'sad' | 'scared';
 export type GameStateEnum = 'characterCreation' | 'exploring' | 'combat' | 'dialogue' | 'gameOver';
+
+export interface DialogueEntry {
+    speaker: string;
+    text: string;
+    timestamp: number;
+}
 
 export interface Item {
     name: string;
@@ -47,6 +54,7 @@ export interface GameState {
     sceneDescription: string;
     imagePrompt: string;
     history: string[];
+    conversationHistory: DialogueEntry[];
     actions: string[];
     gameState: GameStateEnum;
     itemOnGround: Item | null;

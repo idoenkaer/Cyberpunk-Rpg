@@ -1,7 +1,7 @@
 // components/PlayerStatus.tsx
 import React from 'react';
 import type { Player } from '../types';
-import PixelArtCanvas from './PixelArtCanvas';
+import GeneratedPortrait from './GeneratedPortrait';
 
 interface PlayerStatusProps {
     player: Player;
@@ -10,11 +10,8 @@ interface PlayerStatusProps {
 const HealthBar: React.FC<{ value: number, max: number }> = ({ value, max }) => {
     const percentage = max > 0 ? (value / max) * 100 : 0;
     return (
-        <div className="w-full bg-gray-700/50 rounded-full h-4 border border-gray-600">
-            <div 
-                className="bg-cyan-400 h-full rounded-full transition-all duration-500"
-                style={{ width: `${percentage}%` }}
-            ></div>
+        <div className="pixel-health-bar pixel-health-bar--player">
+            <div style={{ width: `${percentage}%` }}></div>
         </div>
     );
 };
@@ -27,9 +24,15 @@ const Stat: React.FC<{ label: string, value: number | string }> = ({ label, valu
 );
 
 const PlayerStatus: React.FC<PlayerStatusProps> = ({ player }) => {
+    const portraitPrompt = `A pixel art portrait of a cyberpunk character named '${player.name}'. 16-bit, head and shoulders view, gritty, neon-lit background.`;
+
     return (
-        <div className="bg-black/30 p-4 border border-cyan-900/50 flex flex-col items-center">
-            <PixelArtCanvas seed={player.name} />
+        <div className="bg-black/50 p-4 pixel-border flex flex-col items-center w-full sm:w-auto md:max-w-xs">
+            <GeneratedPortrait 
+                prompt={portraitPrompt}
+                alt={`Portrait of ${player.name}`}
+                cacheKey={`player-${player.name}`}
+            />
             <h2 className="text-xl text-cyan-300 mt-3 mb-2 uppercase tracking-widest">{player.name}</h2>
             <div className="space-y-2 text-gray-300 w-full">
                 <div>
